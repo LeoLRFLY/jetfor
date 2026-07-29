@@ -393,8 +393,25 @@ function renderInicio(){
       if(q&&!(a.atv.toLowerCase().includes(q)||a.base.toLowerCase().includes(q))) return false;
       return true;
     });
-    $('#dTb').innerHTML=rows.map(a=>`<tr><td>${esc(a.atv)}</td><td class="freq">${esc(a.freq)}</td><td>${esc(a.base)}</td><td><span class="tag ${a.escopo==='SASC'?'s':'g'}">${a.escopo}</span></td></tr>`).join('')||'<tr><td colspan="4" style="color:#999">Nenhuma atividade com esses filtros.</td></tr>';
-    $('#dCount').textContent=rows.length+' de '+ats.length+' atividades exibidas.';
+    $('#dTb').innerHTML=rows.map((a,i)=>{
+      const temComo=!!a.como;
+      return `<tr class="atvrow ${temComo?'expandable':''}" data-i="${i}">
+        <td><span class="caret">${temComo?'▸':''}</span>${esc(a.atv)}</td>
+        <td class="freq">${esc(a.freq)}</td><td>${esc(a.base)}</td>
+        <td><span class="tag ${a.escopo==='SASC'?'s':'g'}">${a.escopo}</span></td></tr>
+        <tr class="atvdet" data-di="${i}" style="display:none"><td colspan="4">
+          <div class="comobox"><b>Como fazer:</b> ${esc(a.como||'—')}</div></td></tr>`;
+    }).join('')||'<tr><td colspan="4" style="color:#999">Nenhuma atividade com esses filtros.</td></tr>';
+    $('#dTb').querySelectorAll('tr.expandable').forEach(tr=>{
+      tr.addEventListener('click',()=>{
+        const i=tr.dataset.i, det=$('#dTb').querySelector(`tr.atvdet[data-di="${i}"]`);
+        const open=det.style.display!=='none';
+        det.style.display=open?'none':'';
+        tr.classList.toggle('open',!open);
+        const c=tr.querySelector('.caret'); if(c) c.textContent=open?'▸':'▾';
+      });
+    });
+    $('#dCount').textContent=rows.length+' de '+ats.length+' atividades exibidas. Clique numa linha para ver como fazer.';
   }
   ['dEsc','dFreq'].forEach(id=>$('#'+id).addEventListener('change',draw));
   $('#dBusca').addEventListener('input',draw);
