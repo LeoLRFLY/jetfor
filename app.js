@@ -546,7 +546,12 @@ function renderForms(){
     const it=F.itens[k];
     el.querySelectorAll('.subtab').forEach(b=>b.classList.toggle('active',b.dataset.form===k));
     $('#formBody').innerHTML=it.build();
-    $('#dlDocx').href=it.docx;
+    const dl=$('#dlDocx');
+    if(it.docx){
+      dl.style.display=''; dl.href=it.docx;
+      if(/^https?:/.test(it.docx)){ dl.target='_blank'; dl.removeAttribute('download'); dl.textContent='↗ Abrir modelo original (Drive)'; }
+      else { dl.target=''; dl.setAttribute('download',''); dl.textContent='⬇ Baixar modelo .docx'; }
+    } else dl.style.display='none';
   }
   el.querySelectorAll('.subtab').forEach(b=>b.addEventListener('click',()=>show(b.dataset.form)));
   show(F.ordem[0]);
