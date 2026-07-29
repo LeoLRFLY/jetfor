@@ -152,6 +152,30 @@
   .rtag.jf{background:#e2efda;color:#2E5A2E}
   .rtag.of{background:#fde8d6;color:#9a4a12}
   .rtag.amb{background:#e7edfb;color:#22406E}
+  /* blocos detalhados (procedimentos / IIO) */
+  #view-inicio .proc{font-size:12.5px;color:#33404f;line-height:1.5;padding:6px 6px 6px 18px;border-left:3px solid var(--navy2);margin:8px 0}
+  #view-inicio .proc b{color:var(--navy)}
+  #view-inicio .proc ol,#view-inicio .proc ul{margin:6px 0;padding-left:18px}
+  #view-inicio .proc li{margin:3px 0}
+  #view-inicio ul.cols2{columns:2;column-gap:20px;list-style:none;padding-left:0}
+  #view-inicio ul.cols2 li{break-inside:avoid;font-size:11.5px;margin:2px 0}
+  #view-inicio .iio-regra{background:var(--warnbg);border:1px solid #e1c877;border-radius:8px;padding:8px 12px;font-size:12.5px;color:#7a5b12;margin:8px 0;line-height:1.45}
+  #view-inicio .iio-regra b{color:#8a5a00}
+  #view-inicio ul.cods{list-style:none;padding-left:0;margin:6px 0}
+  #view-inicio ul.cods li{font-size:12px;margin:3px 0}
+  #view-inicio .cod{display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;background:var(--navy);color:#fff;border-radius:5px;font-weight:700;font-size:11px;margin-right:6px}
+  #view-inicio .iiogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:8px}
+  #view-inicio .iiosis{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  #view-inicio .iiosis-t{background:var(--navy2);color:#fff;font-size:11px;font-weight:700;padding:5px 8px}
+  #view-inicio .iioitem{display:flex;justify-content:space-between;gap:6px;padding:4px 8px;font-size:11px;border-top:1px solid #eef1f6}
+  #view-inicio .iioitem span:first-child{color:#33404f}
+  #view-inicio .cod2{color:var(--navy2);font-weight:700;white-space:nowrap;font-size:10.5px}
+  #view-inicio .iio2col{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  #view-inicio .iiobox{border-radius:8px;padding:8px 12px;font-size:12px;line-height:1.45}
+  #view-inicio .iiobox ul{margin:6px 0;padding-left:16px} #view-inicio .iiobox li{margin:3px 0}
+  #view-inicio .iiobox.nao{background:var(--odbg);border:1px solid #e6b3ad} #view-inicio .iiobox.nao b{color:var(--od)}
+  #view-inicio .iiobox.sim{background:var(--okbg);border:1px solid #a9d6bb} #view-inicio .iiobox.sim b{color:var(--ok)}
+  @media(max-width:640px){#view-inicio .iio2col{grid-template-columns:1fr}#view-inicio ul.cols2{columns:1}}
   /* ---- barra da aeronave + sub-abas do mapa ---- */
   .acbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px}
   .acbadge{background:var(--navy);color:#fff;font-size:12px;font-weight:700;padding:6px 12px;border-radius:8px;white-space:nowrap}
@@ -364,6 +388,7 @@
 <script src="freq_data.js"></script>
 <script src="dash_data.js"></script>
 <script src="da_data.js"></script>
+<script src="iio_data.js"></script>
 <script src="app.js"></script>
 <script>
   if('serviceWorker' in navigator){

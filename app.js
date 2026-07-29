@@ -344,6 +344,32 @@ function renderObrig(){
     `<p class="muted" style="font-size:11px;text-align:center">Fonte: MGM Rev 9.01 · IS 120-016 · RBAC 135.411/415/417 — documento de apoio, confira sempre a revisão vigente.</p>`;
   el.dataset.done='1';
 }
+// ---------- IIO (bloco detalhado, MGM 8.4.13) ----------
+function iioHtml(){
+  const I=window.JETFOR_IIO; if(!I) return '';
+  let h=`<div class="comobox"><b>O que é IIO:</b> ${esc(I.definicao)}</div>`;
+  h+=`<div class="iio-regra"><b>⚠ Regra de ouro:</b> ${esc(I.regraOuro)}</div>`;
+  h+=`<div class="proc"><b>Códigos de requisito:</b><ul class="cods">`+
+     I.codigos.map(c=>`<li><span class="cod">${esc(c.c)}</span> ${esc(c.t)}</li>`).join('')+`</ul></div>`;
+  h+=`<div class="proc"><b>Lista de IIO por sistema (MGM 8.4.13 · Tabela 8.2):</b><div class="iiogrid">`;
+  I.sistemas.forEach(s=>{
+    h+=`<div class="iiosis"><div class="iiosis-t">${esc(s.sis)}</div>`+
+       s.itens.map(it=>`<div class="iioitem"><span>${esc(it[0])}</span><span class="cod2">${esc(it[1])}</span></div>`).join('')+
+       `</div>`;
+  });
+  h+=`</div></div>`;
+  h+=`<div class="iio2col"><div class="iiobox nao"><b>❌ O que NÃO é IIO:</b><ul>`+
+     I.naoIIO.map(x=>`<li>${esc(x)}</li>`).join('')+`</ul></div>`;
+  h+=`<div class="iiobox sim"><b>✅ Vira IIO quando:</b><ul>`+
+     I.viraIIO.map(x=>`<li>${esc(x)}</li>`).join('')+`</ul></div></div>`;
+  return h;
+}
+function detalheAtiv(a){
+  if(/\bIIO\b/.test(a.atv) && window.JETFOR_IIO) return iioHtml();
+  if(a.comoHtml) return a.comoHtml;
+  return `<div class="comobox"><b>Como fazer:</b> ${esc(a.como||'—')}</div>`;
+}
+
 // ---------- INÍCIO (Dashboard da frota) ----------
 function renderInicio(){
   const D=window.JETFOR_DASH; if(!D) return;
@@ -414,7 +440,7 @@ function renderInicio(){
         <td><span class="tag ${a.escopo==='SASC'?'s':'g'}">${a.escopo}</span></td>
         <td>${respTag(a.resp)}</td></tr>
         <tr class="atvdet" data-di="${i}" style="display:none"><td colspan="5">
-          <div class="comobox"><b>Como fazer:</b> ${esc(a.como||'—')}</div></td></tr>`;
+          ${detalheAtiv(a)}</td></tr>`;
     }).join('')||'<tr><td colspan="5" style="color:#999">Nenhuma atividade com esses filtros.</td></tr>';
     $('#dTb').querySelectorAll('tr.expandable').forEach(tr=>{
       tr.addEventListener('click',()=>{
