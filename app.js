@@ -356,14 +356,16 @@ function renderInicio(){
     <h2>Frota &amp; Enquadramento SASC</h2>
     <div class="fleet" id="dashFleet"></div>
     <h2>Atividades &amp; Frequências</h2>
+    ${D.modeloOperacional?`<div class="modelobox"><b>Modelo operacional:</b> ${esc(D.modeloOperacional)}</div>`:''}
     <div class="filters">
       <select id="dEsc"><option value="">Escopo: todos</option><option value="Geral">Geral (toda a frota)</option><option value="SASC">Somente SASC</option></select>
+      <select id="dResp"><option value="">Responsável: todos</option><option value="JetFor">JetFor (controle)</option><option value="Oficina 145">Oficina 145</option><option value="ambos">JetFor + Oficina</option></select>
       <select id="dFreq"></select>
       <input id="dBusca" placeholder="Buscar atividade ou norma..."/>
     </div>
-    <table class="dash"><thead><tr><th style="width:44%">Atividade</th><th>Frequência</th><th>Base</th><th>Escopo</th></tr></thead><tbody id="dTb"></tbody></table>
+    <div class="tblwrap"><table class="dash"><thead><tr><th style="width:38%">Atividade</th><th>Frequência</th><th>Base</th><th>Escopo</th><th>Responsável</th></tr></thead><tbody id="dTb"></tbody></table></div>
     <div class="note" id="dCount"></div>
-    <div class="note"><b>Como ler:</b> atividades <span class="tag g">Geral</span> valem para toda a frota; <span class="tag s">SASC</span> aplicam-se só às aeronaves 10+ assentos (PMAC/SASC). Clique no card de uma aeronave com mapa para abrir o controle dela. Classificação SASC pela configuração de assentos certificada no TCDS (excluindo piloto), não pelo prefixo.</div>`;
+    <div class="note"><b>Como ler:</b> atividades <span class="tag g">Geral</span> valem para toda a frota; <span class="tag s">SASC</span> só para aeronaves 10+ assentos. <b>Responsável:</b> <span class="rtag jf">JetFor</span> = controle/administração feito internamente; <span class="rtag of">Oficina 145</span> = execução física por oficina contratada; <span class="rtag amb">JetFor + Oficina</span> = JetFor controla e a oficina executa. Clique numa linha para ver o "como fazer".</div>`;
   // KPIs
   $('#dashKpis').innerHTML=[['Aeronaves',fleet.length,''],['Frota SASC',nS,'sasc'],['Não-SASC',nN,'non'],['Ativ. gerais',g,''],['Ativ. SASC',s,'sasc']]
     .map(k=>`<div class="kpi2 ${k[2]}"><div class="n">${k[1]}</div><div class="l">${k[0]}</div></div>`).join('');
@@ -385,12 +387,23 @@ function renderInicio(){
   // filtros atividades
   const freqs=[...new Set(ats.map(a=>a.freq))];
   $('#dFreq').innerHTML='<option value="">Frequência: todas</option>'+freqs.map(x=>`<option>${esc(x)}</option>`).join('');
+  function respTag(resp){
+    if(!resp) return '';
+    const jf=resp.includes('JetFor'), of=resp.includes('Oficina');
+    const cls = jf&&of?'amb':jf?'jf':'of';
+    return `<span class="rtag ${cls}">${esc(resp)}</span>`;
+  }
   function draw(){
-    const esc_=$('#dEsc').value, fq=$('#dFreq').value, q=($('#dBusca').value||'').toLowerCase();
+    const esc_=$('#dEsc').value, fq=$('#dFreq').value, rf=$('#dResp').value, q=($('#dBusca').value||'').toLowerCase();
     const rows=ats.filter(a=>{
       if(esc_&&a.escopo!==esc_) return false;
       if(fq&&a.freq!==fq) return false;
-      if(q&&!(a.atv.toLowerCase().includes(q)||a.base.toLowerCase().includes(q))) return false;
+      if(rf){
+        if(rf==='ambos'){ if(!(a.resp&&a.resp.includes('JetFor')&&a.resp.includes('Oficina'))) return false; }
+        else if(rf==='JetFor'){ if(a.resp!=='JetFor') return false; }
+        else if(rf==='Oficina 145'){ if(a.resp!=='Oficina 145') return false; }
+      }
+      if(q&&!(a.atv.toLowerCase().includes(q)||a.base.toLowerCase().includes(q)||(a.resp||'').toLowerCase().includes(q))) return false;
       return true;
     });
     $('#dTb').innerHTML=rows.map((a,i)=>{
@@ -398,10 +411,11 @@ function renderInicio(){
       return `<tr class="atvrow ${temComo?'expandable':''}" data-i="${i}">
         <td><span class="caret">${temComo?'▸':''}</span>${esc(a.atv)}</td>
         <td class="freq">${esc(a.freq)}</td><td>${esc(a.base)}</td>
-        <td><span class="tag ${a.escopo==='SASC'?'s':'g'}">${a.escopo}</span></td></tr>
-        <tr class="atvdet" data-di="${i}" style="display:none"><td colspan="4">
+        <td><span class="tag ${a.escopo==='SASC'?'s':'g'}">${a.escopo}</span></td>
+        <td>${respTag(a.resp)}</td></tr>
+        <tr class="atvdet" data-di="${i}" style="display:none"><td colspan="5">
           <div class="comobox"><b>Como fazer:</b> ${esc(a.como||'—')}</div></td></tr>`;
-    }).join('')||'<tr><td colspan="4" style="color:#999">Nenhuma atividade com esses filtros.</td></tr>';
+    }).join('')||'<tr><td colspan="5" style="color:#999">Nenhuma atividade com esses filtros.</td></tr>';
     $('#dTb').querySelectorAll('tr.expandable').forEach(tr=>{
       tr.addEventListener('click',()=>{
         const i=tr.dataset.i, det=$('#dTb').querySelector(`tr.atvdet[data-di="${i}"]`);
@@ -413,7 +427,7 @@ function renderInicio(){
     });
     $('#dCount').textContent=rows.length+' de '+ats.length+' atividades exibidas. Clique numa linha para ver como fazer.';
   }
-  ['dEsc','dFreq'].forEach(id=>$('#'+id).addEventListener('change',draw));
+  ['dEsc','dFreq','dResp'].forEach(id=>$('#'+id).addEventListener('change',draw));
   $('#dBusca').addEventListener('input',draw);
   draw();
   el.dataset.done='1';
