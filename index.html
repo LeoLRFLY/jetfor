@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JetFor · Mapa de Controle de Manutenção — PT-LJQ</title>
+<style>
+  :root{
+    --navy:#14284B; --navy2:#22406E; --gold:#C79A3B; --grey:#5A5A5A;
+    --ok:#1f8a4c; --okbg:#e8f6ee; --warn:#b8860b; --warnbg:#fdf4e0;
+    --od:#c0392b; --odbg:#fceceb; --line:#d6dbe4; --zebra:#f5f7fb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Calibri,Arial,sans-serif;
+       color:#1a1a1a;background:#eef1f6;font-size:13px}
+  a{color:var(--navy2)}
+  /* ---- header ---- */
+  header{background:var(--navy);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:16px;
+         box-shadow:0 2px 6px rgba(0,0,0,.15);position:sticky;top:0;z-index:40}
+  header img{height:34px}
+  header .t1{font-size:16px;font-weight:700;letter-spacing:.3px}
+  header .t2{font-size:11.5px;color:#c7d2e6}
+  header .spacer{flex:1}
+  .badge{font-size:11px;padding:4px 10px;border-radius:20px;font-weight:600}
+  .badge.on{background:var(--okbg);color:var(--ok)}
+  .badge.off{background:#3a4c6b;color:#dfe6f2}
+  /* ---- panels ---- */
+  .wrap{max-width:1500px;margin:0 auto;padding:14px}
+  /* ---- topnav ---- */
+  .topnav{background:var(--navy2);display:flex;gap:2px;padding:0 14px;position:sticky;top:54px;z-index:35;
+          box-shadow:0 2px 5px rgba(0,0,0,.12)}
+  .navbtn{background:transparent;border:none;color:#c7d2e6;padding:11px 16px;font-size:13px;font-weight:600;
+          cursor:pointer;border-bottom:3px solid transparent}
+  .navbtn:hover{color:#fff}
+  .navbtn.active{color:#fff;border-bottom-color:var(--gold)}
+  /* ---- obrigações ---- */
+  .lead{font-size:12.5px;color:var(--grey);line-height:1.5;margin:0 0 4px}
+  .oktag{color:var(--ok);font-weight:700} .notag{color:var(--od);font-weight:700}
+  table.ref{border-collapse:collapse;width:100%;font-size:12px}
+  table.ref th{background:var(--navy2);color:#fff;padding:7px 9px;text-align:left;font-size:11px;font-weight:600}
+  table.ref td{padding:6px 9px;border-bottom:1px solid #eceff4;vertical-align:top}
+  table.ref tr:nth-child(even) td{background:var(--zebra)}
+  .subhdr td{background:#dfe5f0!important;font-weight:700;color:var(--navy);letter-spacing:.3px}
+  .matrix td.c{text-align:center;font-weight:700}
+  .matrix td.yes{color:var(--ok)} .matrix td.no{color:#c3c9d4}
+  .badge2{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700}
+  .badge2.sim{background:var(--okbg);color:var(--ok)} .badge2.nao{background:#eef2f8;color:var(--grey)}
+  .metod li{margin:3px 0;line-height:1.45;font-size:12.5px}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:10px;margin-bottom:14px;
+         box-shadow:0 1px 3px rgba(20,40,75,.06)}
+  .panel h2{margin:0;padding:10px 16px;font-size:13px;color:var(--navy);border-bottom:1px solid var(--line);
+            display:flex;align-items:center;gap:8px}
+  .panel h2 .tag{background:var(--gold);color:#fff;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700}
+  .pbody{padding:14px 16px}
+  /* ---- counters ---- */
+  .cgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .cgroup{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--zebra)}
+  .cgroup .ctitle{font-size:11px;font-weight:700;color:var(--navy2);text-transform:uppercase;
+                  letter-spacing:.4px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .cgroup .ctitle .dot{width:9px;height:9px;border-radius:50%}
+  .cfield{display:flex;align-items:center;justify-content:space-between;margin:5px 0}
+  .cfield label{font-size:11.5px;color:var(--grey)}
+  .cfield input{width:92px;text-align:right;padding:4px 6px;border:1px solid var(--line);border-radius:5px;
+                font-size:12.5px;font-variant-numeric:tabular-nums}
+  .cfield input:focus{outline:2px solid var(--gold);border-color:var(--gold)}
+  .cnote{font-size:10.5px;color:#8a94a6;margin-top:4px;line-height:1.3}
+  /* ---- toolbar ---- */
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line)}
+  .toolbar input[type=text],.toolbar select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px}
+  .toolbar input[type=text]{min-width:200px}
+  .btn{border:none;border-radius:6px;padding:7px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .btn.p{background:var(--navy);color:#fff}
+  .btn.g{background:var(--gold);color:#fff}
+  .btn.o{background:#fff;color:var(--navy);border:1px solid var(--line)}
+  .btn:hover{filter:brightness(1.07)}
+  .btn.sm{padding:4px 8px;font-size:11px}
+  .kpis{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+  .kpi{padding:4px 10px;border-radius:6px;font-size:11.5px;font-weight:700}
+  .kpi.od{background:var(--odbg);color:var(--od)} .kpi.wn{background:var(--warnbg);color:var(--warn)}
+  .kpi.ok{background:var(--okbg);color:var(--ok)} .kpi.all{background:#eef2f8;color:var(--navy2)}
+  /* ---- table ---- */
+  .tblwrap{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  thead th{background:var(--navy2);color:#fff;font-weight:600;padding:7px 8px;text-align:left;
+           position:sticky;top:0;white-space:nowrap;font-size:11px}
+  tbody td{padding:6px 8px;border-bottom:1px solid #eceff4;vertical-align:middle}
+  tbody tr:nth-child(even){background:var(--zebra)}
+  tbody tr.od{background:var(--odbg)!important}
+  tbody tr.wn{background:var(--warnbg)!important}
+  .grp{background:#dfe5f0!important}
+  .grp td{font-weight:700;color:var(--navy);font-size:11.5px;padding:6px 8px;letter-spacing:.3px}
+  .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700}
+  .pill.od{background:var(--od);color:#fff} .pill.wn{background:var(--warn);color:#fff} .pill.ok{background:var(--ok);color:#fff}
+  .basetag{font-size:10px;padding:2px 6px;border-radius:4px;background:#eef2f8;color:var(--navy2);white-space:nowrap}
+  .basetag.m1{background:#e7f0ff;color:#1c5bb8} .basetag.m2{background:#fdeee6;color:#b8631c}
+  .basetag.cal{background:#f0ebf9;color:#6b3fa0}
+  .obscell{max-width:200px;font-size:11px;color:#4a5261;white-space:normal;line-height:1.25}
+  .act button{margin-right:4px}
+  .muted{color:#9aa3b2}
+  .disp-neg{color:var(--od);font-weight:700}
+  /* ---- modal ---- */
+  .overlay{position:fixed;inset:0;background:rgba(15,25,45,.45);display:none;align-items:flex-start;
+           justify-content:center;z-index:60;overflow:auto;padding:30px 12px}
+  .overlay.show{display:flex}
+  .modal{background:#fff;border-radius:12px;width:640px;max-width:100%;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+  .modal h3{margin:0;padding:14px 18px;background:var(--navy);color:#fff;border-radius:12px 12px 0 0;font-size:14px}
+  .mbody{padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .mbody .full{grid-column:1/3}
+  .fld{display:flex;flex-direction:column;gap:3px}
+  .fld label{font-size:11px;color:var(--grey);font-weight:600}
+  .fld input,.fld select,.fld textarea{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px}
+  .fld textarea{resize:vertical;min-height:40px}
+  .mfoot{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}
+  .hint{font-size:10.5px;color:#8a94a6;margin-top:2px}
+  /* toast */
+  #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;
+         padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;z-index:80;pointer-events:none}
+  #toast.show{opacity:1}
+  /* print */
+  @media print{
+    body{background:#fff;font-size:10px}
+    header{position:static;box-shadow:none} .toolbar,.act,#counters .cnote,.no-print{display:none!important}
+    .panel{box-shadow:none;border:none;margin-bottom:6px} thead th{position:static}
+    @page{size:A4 landscape;margin:8mm}
+  }
+</style>
+</head>
+<body>
+<header>
+  <img id="logo" alt="JetFor">
+  <div>
+    <div class="t1">Controle de Manutenção · JetFor</div>
+    <div class="t2" id="acinfo">PT-LJQ</div>
+  </div>
+  <div class="spacer"></div>
+  <span class="badge off" id="connBadge">● Local</span>
+  <button class="btn g no-print" id="btnSave">💾 Salvar</button>
+  <button class="btn o no-print" id="btnExport">Exportar</button>
+  <button class="btn o no-print" id="btnImport">Importar</button>
+  <button class="btn o no-print" onclick="window.print()">Imprimir</button>
+  <input type="file" id="fileImport" accept="application/json" style="display:none">
+</header>
+
+<nav class="topnav no-print">
+  <button class="navbtn active" data-view="mapa">🛠 Mapa de Manutenção</button>
+  <button class="navbtn" data-view="obrig">📋 Obrigações MGM (SASC / PMAC)</button>
+</nav>
+
+<div class="wrap" id="view-mapa">
+
+  <!-- COUNTERS -->
+  <div class="panel" id="counters">
+    <h2><span class="tag">CONTADORES</span> Atualize aqui e o mapa recalcula sozinho</h2>
+    <div class="pbody">
+      <div class="cgrid" id="cgrid"></div>
+      <div class="cfield" style="margin-top:12px;max-width:260px">
+        <label><b>Data de hoje (referência calendário)</b></label>
+        <input type="date" id="hoje">
+      </div>
+    </div>
+  </div>
+
+  <!-- TASKS -->
+  <div class="panel">
+    <div class="toolbar">
+      <input type="text" id="q" placeholder="🔎 Buscar tarefa, grupo, P/N...">
+      <select id="fgrupo"><option value="">Todos os grupos</option></select>
+      <select id="fstatus">
+        <option value="">Todos os status</option>
+        <option value="od">🔴 Vencidos</option>
+        <option value="wn">🟠 Próximos</option>
+        <option value="ok">🟢 Em dia</option>
+      </select>
+      <button class="btn p sm" id="btnAdd">+ Nova tarefa</button>
+      <div class="kpis" id="kpis"></div>
+    </div>
+    <div class="tblwrap">
+      <table id="tbl">
+        <thead><tr>
+          <th>Nomenclatura</th><th>P/N</th><th>S/N</th><th>Base</th>
+          <th class="num">Intervalo</th><th class="num">Últ. Exec.</th>
+          <th class="num">Vence (VENC)</th><th class="num">Restante (DISP)</th>
+          <th>Calendário</th><th>Observações</th><th>Status</th><th class="no-print">Ações</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="muted" style="font-size:11px;text-align:center">
+    Jet For Aviation Ltda · Direção de Manutenção · Protótipo dinâmico (Fase 2) — dados migrados do Excel PT-LJQ.
+  </p>
+</div>
+
+<div class="wrap" id="view-obrig" style="display:none"></div>
+
+<!-- EDIT MODAL -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3 id="modalTitle">Editar tarefa</h3>
+    <div class="mbody" id="mbody">
+      <div class="fld full"><label>Nomenclatura</label><input id="f_nome"></div>
+      <div class="fld"><label>Grupo</label><input id="f_grupo" list="grupos"></div>
+      <div class="fld"><label>Base de contagem</label>
+        <select id="f_base">
+          <option value="celula_horas">Célula — Horas</option>
+          <option value="celula_pousos">Célula — Pousos</option>
+          <option value="celula_ciclos">Célula — Ciclos</option>
+          <option value="motor1_horas">Motor 1 — Horas</option>
+          <option value="motor1_ciclos">Motor 1 — Ciclos</option>
+          <option value="motor2_horas">Motor 2 — Horas</option>
+          <option value="motor2_ciclos">Motor 2 — Ciclos</option>
+          <option value="helice_horas">Hélice — Horas</option>
+          <option value="calendario">Somente Calendário</option>
+        </select>
+      </div>
+      <div class="fld"><label>P/N</label><input id="f_pn"></div>
+      <div class="fld"><label>S/N</label><input id="f_sn"></div>
+      <div class="fld"><label>Intervalo (na unidade da base)</label><input id="f_intervalo" type="number" step="any">
+        <span class="hint">Ex.: 150 horas, 4000 pousos, 14000 ciclos.</span></div>
+      <div class="fld"><label>Última execução (valor do contador)</label><input id="f_exec" type="number" step="any">
+        <span class="hint">Valor do contador quando foi feita. VENC = Exec + Intervalo.</span></div>
+      <div class="fld"><label>VENC fixo (opcional)</label><input id="f_vencfixo" type="number" step="any">
+        <span class="hint">Use só p/ limite fixo (ex.: LLP) sem intervalo.</span></div>
+      <div class="fld full" style="border-top:1px dashed var(--line);padding-top:10px">
+        <label>Co-limite calendário (opcional)</label></div>
+      <div class="fld"><label>Meses</label><input id="f_calmeses" type="number" step="1"></div>
+      <div class="fld"><label>Data última execução</label><input id="f_calexec" type="date"></div>
+      <div class="fld full"><label>Observações</label><textarea id="f_obs"></textarea></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn o" id="btnDelete" style="color:var(--od)">🗑 Excluir</button>
+      <div>
+        <button class="btn o" id="btnCancel">Cancelar</button>
+        <button class="btn p" id="btnOk">Salvar tarefa</button>
+      </div>
+    </div>
+  </div>
+</div>
+<datalist id="grupos"></datalist>
+<div id="toast"></div>
+
+<!-- Firebase (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<script src="data.js"></script>
+<script src="freq_data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
