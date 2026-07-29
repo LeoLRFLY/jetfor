@@ -127,7 +127,15 @@
   #view-inicio .ac .row{font-size:12px;color:#6b7280;margin-top:6px} #view-inicio .ac .row b{color:#1f2733;font-weight:600}
   #view-inicio .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;color:#fff}
   #view-inicio .badge.s{background:#2E7D32} #view-inicio .badge.n{background:#7A7F87}
-  #view-inicio .verMapa{display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:var(--gold)}
+  #view-inicio .verMapa{display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:var(--gold);cursor:pointer}
+  #view-inicio .ac-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px}
+  #view-inicio .ac-btns{display:flex;gap:2px;opacity:.55}
+  #view-inicio .ac:hover .ac-btns{opacity:1}
+  #view-inicio .acbtn{border:none;background:#eef2f8;border-radius:5px;padding:2px 6px;cursor:pointer;font-size:12px}
+  #view-inicio .acbtn.del:hover{background:var(--odbg)}
+  #view-inicio .ac.addac{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    border:2px dashed #c2cbdb;color:var(--navy2);background:#f7f9fc;font-weight:700;font-size:13px;cursor:pointer;border-left:2px dashed #c2cbdb;min-height:120px;line-height:1.4}
+  #view-inicio .ac.addac:hover{background:#eef4ff;border-color:var(--gold);color:var(--navy)}
   #view-inicio .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
   #view-inicio .filters select,#view-inicio .filters input{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;background:#fff}
   #view-inicio .filters input{flex:1;min-width:160px}
@@ -236,7 +244,40 @@
     #view-inicio .fleet{grid-template-columns:1fr}
     #view-inicio .kpis2{grid-template-columns:repeat(2,1fr)}
   }
+  /* ---- formulários ---- */
+  .formactions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+  .formdoc{background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px 20px;max-width:920px;margin:0 auto}
+  .fh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:2px solid var(--gold);padding-bottom:8px;margin-bottom:12px}
+  .fh-jf{font-weight:800;color:var(--navy);font-size:16px;display:block}
+  .fh-emp{font-size:11px;color:var(--grey)}
+  .fh-r{text-align:right;font-size:12px;color:#33404f}
+  .fh-min{font-size:10px;color:#8a94a6}
+  .fsec{background:var(--navy2);color:#fff;font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:5px;margin:12px 0 6px}
+  .fsec .fh-min{color:#c7d2e6}
+  table.ff{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:4px}
+  table.ff th{background:#eef2f8;color:var(--navy);text-align:left;font-weight:600;padding:5px 8px;border:1px solid var(--line);white-space:nowrap;width:1%}
+  table.ff td{border:1px solid var(--line);padding:0}
+  table.ff td input{width:100%;border:none;padding:6px 8px;font-size:12px;background:transparent}
+  table.ff td input:focus{outline:2px solid var(--gold);outline-offset:-2px}
+  table.ff.grid th{background:var(--navy2);color:#fff;width:auto;text-align:center}
+  .chkgrid{columns:2;column-gap:22px}
+  .chk{display:block;font-size:11.5px;margin:4px 0;break-inside:avoid;line-height:1.35}
+  .chk input{margin-right:6px}
+  .frad{display:flex;flex-direction:column;gap:4px;margin:6px 0}
+  textarea.fta{width:100%;border:1px solid var(--line);border-radius:6px;padding:8px;font-size:12px;font-family:inherit;resize:vertical}
+  .fsign{margin-top:20px;font-size:12px;line-height:1.4}
+  .fsign-line{margin-bottom:2px;color:#33404f}
+  .floc{margin-top:8px;font-size:11.5px;color:#33404f}
+  .fobs{margin-top:12px;font-size:10.5px;color:#8a94a6;font-style:italic}
+  .outros{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+  .outros-links{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+  @media(max-width:640px){.chkgrid{columns:1}}
   /* print */
+  @media print{
+    #view-forms .subtabs,.formactions,.outros{display:none!important}
+    .formdoc{border:none;padding:0;max-width:100%}
+    table.ff td input,textarea.fta{outline:none}
+  }
   @media print{
     body{background:#fff;font-size:10px}
     header{position:static;box-shadow:none} .toolbar,.act,#counters .cnote,.no-print{display:none!important}
@@ -265,6 +306,7 @@
   <button class="navbtn active" data-view="inicio">🏠 Início</button>
   <button class="navbtn" data-view="mapa">🛠 Mapa de Manutenção</button>
   <button class="navbtn" data-view="obrig">📋 Obrigações MGM (SASC / PMAC)</button>
+  <button class="navbtn" data-view="forms">📝 Formulários</button>
 </nav>
 
 <div class="wrap" id="view-inicio"></div>
@@ -334,6 +376,8 @@
 
 <div class="wrap" id="view-obrig" style="display:none"></div>
 
+<div class="wrap" id="view-forms" style="display:none"></div>
+
 <!-- EDIT MODAL -->
 <div class="overlay" id="overlay">
   <div class="modal">
@@ -378,6 +422,33 @@
   </div>
 </div>
 <datalist id="grupos"></datalist>
+
+<!-- FLEET MODAL -->
+<div class="overlay" id="acOverlay">
+  <div class="modal">
+    <h3 id="acTitle">Adicionar aeronave</h3>
+    <div class="mbody">
+      <div class="fld"><label>Matrícula</label><input id="ac_mat" placeholder="Ex.: PT-LJQ"></div>
+      <div class="fld"><label>Modelo</label><input id="ac_modelo" placeholder="Ex.: Cessna Citation S550"></div>
+      <div class="fld"><label>Fabricante</label><input id="ac_fab"></div>
+      <div class="fld"><label>TCDS (ANAC)</label><input id="ac_tcds" placeholder="Ex.: EM-8403"></div>
+      <div class="fld"><label>Assentos certificados (excl. piloto)</label><input id="ac_assentos" placeholder="Ex.: 10+ / ≤9"></div>
+      <div class="fld"><label>Enquadramento (RBAC 135.411)</label>
+        <select id="ac_enq">
+          <option value="135.411(a)(1)">(a)(1) — até 9 assentos · NÃO-SASC</option>
+          <option value="135.411(a)(2)">(a)(2) — 10+ assentos · SASC</option>
+        </select>
+        <span class="hint">O SASC é definido automaticamente pelo enquadramento.</span>
+      </div>
+      <div class="fld full"><label>Observação</label><textarea id="ac_obs"></textarea></div>
+      <div class="fld full"><label><input type="checkbox" id="ac_mapa" style="width:auto;margin-right:6px">Esta aeronave tem mapa de manutenção (card clicável)</label></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn o" id="acDelete" style="color:var(--od)">🗑 Remover</button>
+      <div><button class="btn o" id="acCancel">Cancelar</button><button class="btn p" id="acOk">Salvar</button></div>
+    </div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <!-- Firebase (compat) -->
@@ -389,6 +460,7 @@
 <script src="dash_data.js"></script>
 <script src="da_data.js"></script>
 <script src="iio_data.js"></script>
+<script src="forms.js"></script>
 <script src="app.js"></script>
 <script>
   if('serviceWorker' in navigator){

@@ -4,7 +4,6 @@ window.JETFOR_DASH = {
   {"mat":"(em inclusão)","modelo":"Cessna Citation 550","fab":"Cessna","tcds":"EM-8403-02","assentos":"10+ (confirmar)","enq":"135.411(a)(2)","sasc":true,"obs":"Em processo de inclusão","mapa":null},
   {"mat":"PT-LJQ","modelo":"Cessna Citation S550","fab":"Cessna","tcds":"EM-8403 (confirmar)","assentos":"10+ (confirmar)","enq":"135.411(a)(2)","sasc":true,"obs":"S/N S550-0113 · em inclusão no SASC","mapa":"PT-LJQ"},
   {"mat":"PR-LJA (confirmar)","modelo":"Embraer EMB-505 (Phenom 300)","fab":"Embraer","tcds":"EA-2009T12","assentos":"até 10 (tipo cert. 11 ocup.)","enq":"135.411(a)(2)","sasc":true,"obs":"SASC pela certificação de tipo (até 10 assentos pax)","mapa":null},
-  {"mat":"PP-LCB","modelo":"Beechcraft King Air 200 (A200)","fab":"Beechcraft","tcds":"EM-8005-13","assentos":"8 (config. aprovada)","enq":"135.411(a)(1)","sasc":false,"obs":"Mesmo tipo do B200GT, config. ≤9","mapa":null},
   {"mat":"PP-SCF","modelo":"Beechcraft King Air C90","fab":"Beechcraft","tcds":"a levantar","assentos":"5 (config.)","enq":"135.411(a)(1)","sasc":false,"obs":"≤9 assentos","mapa":null},
   {"mat":"PS-ALT","modelo":"Beechcraft King Air C90A","fab":"Beechcraft","tcds":"a levantar","assentos":"≤9 (confirmar)","enq":"135.411(a)(1)","sasc":false,"obs":"PMAC/SASC cancelados 2022 (isenção IS 120-016 rev B)","mapa":null},
   {"mat":"PR-AEX","modelo":"Hawker 400A (Beechjet 400)","fab":"Hawker","tcds":"a levantar","assentos":"≤9 (confirmar)","enq":"135.411(a)(1)","sasc":false,"obs":"≤9 assentos","mapa":null}

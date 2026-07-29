@@ -71,7 +71,7 @@ function compute(task){
 // ---------- PERSISTÊNCIA ----------
 function saveLocal(){ try{ localStorage.setItem(LSKEY, JSON.stringify(stripState())); }catch(e){} }
 function loadLocal(){ try{ const s=localStorage.getItem(LSKEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
-function stripState(){ return { aeronave:STATE.aeronave, contadores:STATE.contadores, tarefas:STATE.tarefas, hoje:STATE.hoje }; }
+function stripState(){ return { aeronave:STATE.aeronave, contadores:STATE.contadores, tarefas:STATE.tarefas, hoje:STATE.hoje, frota:STATE.frota }; }
 
 async function saveAll(){
   saveLocal();
@@ -105,8 +105,10 @@ function initFirebase(){
       STATE.aeronave=d.aeronave||STATE.aeronave;
       STATE.contadores=d.contadores||STATE.contadores;
       STATE.tarefas=d.tarefas||STATE.tarefas;
+      if(d.frota) STATE.frota=d.frota;
       if(d.hoje) STATE.hoje=d.hoje;
       renderAll();
+      if($('#view-inicio').dataset.done) drawFleet();
     });
   }catch(e){ console.error(e); ONLINE=false; setBadge(false); }
 }
@@ -371,12 +373,36 @@ function detalheAtiv(a){
 }
 
 // ---------- INÍCIO (Dashboard da frota) ----------
-function renderInicio(){
-  const D=window.JETFOR_DASH; if(!D) return;
-  const el=$('#view-inicio'); if(el.dataset.done) return;
-  const fleet=D.fleet, ats=D.atividades;
+function drawFleet(){
+  const fleet=STATE.frota||[], ats=window.JETFOR_DASH.atividades;
   const nS=fleet.filter(f=>f.sasc).length, nN=fleet.length-nS;
   const g=ats.filter(a=>a.escopo==='Geral').length, s=ats.length-g;
+  $('#dashKpis').innerHTML=[['Aeronaves',fleet.length,''],['Frota SASC',nS,'sasc'],['Não-SASC',nN,'non'],['Ativ. gerais',g,''],['Ativ. SASC',s,'sasc']]
+    .map(k=>`<div class="kpi2 ${k[2]}"><div class="n">${k[1]}</div><div class="l">${k[0]}</div></div>`).join('');
+  $('#dashFleet').innerHTML=fleet.map((f,i)=>{
+    const clic=f.mapa?'clik':'';
+    return `<div class="ac ${f.sasc?'sasc':''} ${clic}" data-i="${i}">
+      <div class="ac-top"><div class="mat">${esc(f.mat)}</div>
+        <div class="ac-btns no-print"><button class="acbtn" data-edit="${i}" title="Editar">✎</button><button class="acbtn del" data-del="${i}" title="Remover">🗑</button></div></div>
+      <div class="mod">${esc(f.modelo)}</div>
+      <span class="badge ${f.sasc?'s':'n'}">${f.sasc?'SASC':'NÃO-SASC'}</span>
+      <span class="badge n" style="background:#22406E">${esc(f.enq)}</span>
+      <div class="row"><b>TCDS:</b> ${esc(f.tcds)}</div>
+      <div class="row"><b>Assentos (excl. piloto):</b> ${esc(f.assentos)}</div>
+      <div class="row">${esc(f.obs)}</div>
+      ${f.mapa?`<div class="verMapa" data-map="${i}">Ver mapa de manutenção →</div>`:`<div class="row" style="color:#b0b6c0">Mapa em breve</div>`}
+    </div>`;}).join('')+`<button class="ac addac no-print" id="btnAddAc">＋<br>Adicionar aeronave</button>`;
+  $('#dashFleet').querySelectorAll('[data-map]').forEach(x=>x.addEventListener('click',e=>{e.stopPropagation();switchView('mapa');}));
+  $('#dashFleet').querySelectorAll('.ac.clik').forEach(card=>card.addEventListener('click',()=>switchView('mapa')));
+  $('#dashFleet').querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openAcModal(+b.dataset.edit);}));
+  $('#dashFleet').querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();delAc(+b.dataset.del);}));
+  $('#btnAddAc').addEventListener('click',()=>openAcModal(null));
+}
+function renderInicio(){
+  const D=window.JETFOR_DASH; if(!D) return;
+  if(!STATE.frota) STATE.frota=D.fleet.map(x=>Object.assign({},x));
+  const el=$('#view-inicio'); if(el.dataset.done){ drawFleet(); return; }
+  const ats=D.atividades;
   el.innerHTML=`
     <div class="kpis2" id="dashKpis"></div>
     <h2>Frota &amp; Enquadramento SASC</h2>
@@ -392,24 +418,7 @@ function renderInicio(){
     <div class="tblwrap"><table class="dash"><thead><tr><th style="width:38%">Atividade</th><th>Frequência</th><th>Base</th><th>Escopo</th><th>Responsável</th></tr></thead><tbody id="dTb"></tbody></table></div>
     <div class="note" id="dCount"></div>
     <div class="note"><b>Como ler:</b> atividades <span class="tag g">Geral</span> valem para toda a frota; <span class="tag s">SASC</span> só para aeronaves 10+ assentos. <b>Responsável:</b> <span class="rtag jf">JetFor</span> = controle/administração feito internamente; <span class="rtag of">Oficina 145</span> = execução física por oficina contratada; <span class="rtag amb">JetFor + Oficina</span> = JetFor controla e a oficina executa. Clique numa linha para ver o "como fazer".</div>`;
-  // KPIs
-  $('#dashKpis').innerHTML=[['Aeronaves',fleet.length,''],['Frota SASC',nS,'sasc'],['Não-SASC',nN,'non'],['Ativ. gerais',g,''],['Ativ. SASC',s,'sasc']]
-    .map(k=>`<div class="kpi2 ${k[2]}"><div class="n">${k[1]}</div><div class="l">${k[0]}</div></div>`).join('');
-  // Fleet cards (PT-LJQ e afins clicáveis)
-  $('#dashFleet').innerHTML=fleet.map((f,i)=>{
-    const clic=f.mapa?'clik':'';
-    return `<div class="ac ${f.sasc?'sasc':''} ${clic}" data-mapa="${f.mapa||''}">
-      <div class="mat">${esc(f.mat)}</div><div class="mod">${esc(f.modelo)}</div>
-      <span class="badge ${f.sasc?'s':'n'}">${f.sasc?'SASC':'NÃO-SASC'}</span>
-      <span class="badge n" style="background:#22406E">${esc(f.enq)}</span>
-      <div class="row"><b>TCDS:</b> ${esc(f.tcds)}</div>
-      <div class="row"><b>Assentos (excl. piloto):</b> ${esc(f.assentos)}</div>
-      <div class="row">${esc(f.obs)}</div>
-      ${f.mapa?`<div class="verMapa">Ver mapa de manutenção →</div>`:`<div class="row" style="color:#b0b6c0">Mapa em breve</div>`}
-    </div>`;}).join('');
-  $('#dashFleet').querySelectorAll('.ac.clik').forEach(card=>{
-    card.addEventListener('click',()=>switchView('mapa'));
-  });
+  drawFleet();
   // filtros atividades
   const freqs=[...new Set(ats.map(a=>a.freq))];
   $('#dFreq').innerHTML='<option value="">Frequência: todas</option>'+freqs.map(x=>`<option>${esc(x)}</option>`).join('');
@@ -481,13 +490,78 @@ function selectMapaSubtab(k){
   window.scrollTo(0,0);
 }
 
+// ---------- FROTA: adicionar / editar / remover ----------
+let acEditIdx=null;
+function openAcModal(i){
+  acEditIdx=i;
+  const f = (i!=null && STATE.frota[i]) ? STATE.frota[i] : {enq:'135.411(a)(1)'};
+  $('#acTitle').textContent = i!=null ? 'Editar aeronave' : 'Adicionar aeronave';
+  $('#ac_mat').value=f.mat||''; $('#ac_modelo').value=f.modelo||''; $('#ac_fab').value=f.fab||'';
+  $('#ac_tcds').value=f.tcds||''; $('#ac_assentos').value=f.assentos||'';
+  $('#ac_enq').value=f.enq||'135.411(a)(1)'; $('#ac_obs').value=f.obs||'';
+  $('#ac_mapa').checked=!!f.mapa;
+  $('#acDelete').style.display = i!=null ? 'inline-block':'none';
+  $('#acOverlay').classList.add('show');
+}
+function closeAcModal(){ $('#acOverlay').classList.remove('show'); acEditIdx=null; }
+function saveAcModal(){
+  const enq=$('#ac_enq').value;
+  const rec={
+    mat:$('#ac_mat').value.trim()||'(sem matrícula)', modelo:$('#ac_modelo').value.trim(),
+    fab:$('#ac_fab').value.trim(), tcds:$('#ac_tcds').value.trim()||'a levantar',
+    assentos:$('#ac_assentos').value.trim(), enq:enq,
+    sasc: enq.includes('(a)(2)'),
+    obs:$('#ac_obs').value.trim(),
+    mapa: $('#ac_mapa').checked ? ($('#ac_mat').value.trim()||'aeronave') : null
+  };
+  if(!rec.modelo){ toast('Informe o modelo'); return; }
+  if(acEditIdx!=null) STATE.frota[acEditIdx]=Object.assign({},STATE.frota[acEditIdx],rec);
+  else STATE.frota.push(rec);
+  closeAcModal(); drawFleet(); saveAll();
+}
+function delAc(i){
+  const f=STATE.frota[i]; if(!f) return;
+  if(!window.confirm(`Remover a aeronave ${f.mat} (${f.modelo}) do escopo?`)) return;
+  STATE.frota.splice(i,1); drawFleet(); saveAll(); toast('Aeronave removida');
+}
+
+// ---------- FORMULÁRIOS ----------
+function renderForms(){
+  const F=window.JETFOR_FORMS; if(!F) return;
+  const el=$('#view-forms'); if(el.dataset.done) return;
+  const tabs=F.ordem.map((k,i)=>`<button class="subtab ${i===0?'active':''}" data-form="${k}">${esc(F.itens[k].label)}</button>`).join('');
+  const outros=F.outros.map(o=>`<a class="btn o sm" href="${o.url}" target="_blank" rel="noopener">${esc(o.nome)} ↗</a>`).join(' ');
+  el.innerHTML=`<div class="panel"><div class="pbody">
+    <div class="subtabs">${tabs}</div>
+    <div class="formactions no-print">
+      <button class="btn p sm" onclick="window.print()">🖨 Imprimir / Salvar PDF</button>
+      <a class="btn g sm" id="dlDocx" href="#" download>⬇ Baixar modelo .docx</a>
+      <span class="muted" style="font-size:11px">Preencha na tela e imprima/salve em PDF, ou baixe o modelo Word.</span>
+    </div>
+    <div id="formBody"></div>
+    <div class="outros no-print"><b>Outros formulários (abrir no Drive):</b><div class="outros-links">${outros}</div>
+      <span class="muted" style="font-size:11px">Versões preenchíveis destes entram nas próximas etapas.</span></div>
+  </div></div>`;
+  function show(k){
+    const it=F.itens[k];
+    el.querySelectorAll('.subtab').forEach(b=>b.classList.toggle('active',b.dataset.form===k));
+    $('#formBody').innerHTML=it.build();
+    $('#dlDocx').href=it.docx;
+  }
+  el.querySelectorAll('.subtab').forEach(b=>b.addEventListener('click',()=>show(b.dataset.form)));
+  show(F.ordem[0]);
+  el.dataset.done='1';
+}
+
 function switchView(v){
   document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   $('#view-inicio').style.display = v==='inicio'?'':'none';
   $('#view-mapa').style.display = v==='mapa'?'':'none';
   $('#view-obrig').style.display = v==='obrig'?'':'none';
+  $('#view-forms').style.display = v==='forms'?'':'none';
   if(v==='inicio') renderInicio();
   if(v==='obrig') renderObrig();
+  if(v==='forms') renderForms();
   window.scrollTo(0,0);
 }
 
@@ -501,7 +575,8 @@ function boot(){
     contadores: (local&&local.contadores) || seed.contadores,
     contadoresInfo: seed.contadoresInfo,
     tarefas: (local&&local.tarefas) || seed.tarefas,
-    hoje: (local&&local.hoje) || todayISO()
+    hoje: (local&&local.hoje) || todayISO(),
+    frota: (local&&local.frota) || (window.JETFOR_DASH? window.JETFOR_DASH.fleet.map(x=>Object.assign({},x)) : [])
   };
   $('#acinfo').textContent = `${seed.aeronave.matricula} · ${seed.aeronave.modelo} · S/N ${seed.aeronave.sn} · ${seed.aeronave.ano}`;
   renderAll();
@@ -525,5 +600,9 @@ function boot(){
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
   document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
   document.querySelectorAll('#mapaSubtabs .subtab').forEach(b=>b.addEventListener('click',()=>selectMapaSubtab(b.dataset.sheet)));
+  $('#acOk').addEventListener('click',saveAcModal);
+  $('#acCancel').addEventListener('click',closeAcModal);
+  $('#acDelete').addEventListener('click',()=>{ if(acEditIdx!=null){ const i=acEditIdx; closeAcModal(); delAc(i); } });
+  $('#acOverlay').addEventListener('click',e=>{ if(e.target.id==='acOverlay') closeAcModal(); });
 }
 document.addEventListener('DOMContentLoaded',boot);
