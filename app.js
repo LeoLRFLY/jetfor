@@ -402,35 +402,26 @@ function renderInicio(){
   el.dataset.done='1';
 }
 
-// ---------- DA & BOLETINS ----------
-function renderDABOL(){
-  const DA=window.JETFOR_DA; if(!DA) return;
-  const el=$('#view-dabol'); if(el.dataset.done) return;
-  const keys=['celula','m1','m2','bm1','bm2'];
-  const tabs=keys.map((k,i)=>`<button class="subtab ${i===0?'active':''}" data-da="${k}">${esc(DA.sheets[k].title)}</button>`).join('');
-  el.innerHTML=`<div class="panel"><div class="pbody">
-    <div class="subtabs">${tabs}</div>
-    <div id="daBody"></div>
-  </div></div>`;
-  function drawSheet(k){
-    const sh=DA.sheets[k];
-    let h='';
-    if(sh.stale) h+=`<div class="stale">⚠ Esta aba veio do Excel com dados de <b>outra aeronave</b> (template). Substituir pelos boletins reais do S550 quando disponíveis.</div>`;
-    if(sh.info&&sh.info.length) h+=`<p class="lead" style="margin-bottom:8px">${sh.info.map(esc).join(' · ')}</p>`;
-    h+=`<div class="tblwrap"><table class="da"><thead><tr>${DA.cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>`;
-    sh.rows.forEach(r=>{
-      if(r.sec!==undefined){ h+=`<tr class="dasec"><td colspan="${DA.cols.length}">${esc(r.sec)}</td></tr>`; return; }
-      h+=`<tr>${r.c.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`;
-    });
-    h+=`</tbody></table></div>`;
-    $('#daBody').innerHTML=h;
-  }
-  el.querySelectorAll('.subtab').forEach(b=>b.addEventListener('click',()=>{
-    el.querySelectorAll('.subtab').forEach(x=>x.classList.toggle('active',x===b));
-    drawSheet(b.dataset.da);
-  }));
-  drawSheet('celula');
-  el.dataset.done='1';
+// ---------- Sub-abas do MAPA: DA & Boletins (por aeronave) ----------
+function renderMapaSheet(k){
+  const DA=window.JETFOR_DA; if(!DA||!DA.sheets[k]) return;
+  const sh=DA.sheets[k];
+  let h=`<div class="panel"><h2><span class="tag">${esc(sh.title.split('—')[0].trim())}</span> ${esc(sh.title)} — PT-LJQ</h2><div class="pbody">`;
+  if(sh.stale) h+=`<div class="stale">⚠ Esta aba veio do Excel com dados de <b>outra aeronave</b> (template). Substituir pelos boletins reais do S550 quando disponíveis.</div>`;
+  if(sh.info&&sh.info.length) h+=`<p class="lead" style="margin-bottom:8px">${sh.info.map(esc).join(' · ')}</p>`;
+  h+=`<div class="tblwrap"><table class="da"><thead><tr>${DA.cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>`;
+  sh.rows.forEach(r=>{
+    if(r.sec!==undefined){ h+=`<tr class="dasec"><td colspan="${DA.cols.length}">${esc(r.sec)}</td></tr>`; return; }
+    h+=`<tr>${r.c.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`;
+  });
+  h+=`</tbody></table></div></div></div>`;
+  $('#mapa-sheet').innerHTML=h;
+}
+function selectMapaSubtab(k){
+  document.querySelectorAll('#mapaSubtabs .subtab').forEach(b=>b.classList.toggle('active',b.dataset.sheet===k));
+  if(k==='mapa'){ $('#mapa-main').style.display=''; $('#mapa-sheet').style.display='none'; }
+  else { $('#mapa-main').style.display='none'; renderMapaSheet(k); $('#mapa-sheet').style.display=''; }
+  window.scrollTo(0,0);
 }
 
 function switchView(v){
@@ -438,10 +429,8 @@ function switchView(v){
   $('#view-inicio').style.display = v==='inicio'?'':'none';
   $('#view-mapa').style.display = v==='mapa'?'':'none';
   $('#view-obrig').style.display = v==='obrig'?'':'none';
-  $('#view-dabol').style.display = v==='dabol'?'':'none';
   if(v==='inicio') renderInicio();
   if(v==='obrig') renderObrig();
-  if(v==='dabol') renderDABOL();
   window.scrollTo(0,0);
 }
 
@@ -478,5 +467,6 @@ function boot(){
   $('#overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
   document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
+  document.querySelectorAll('#mapaSubtabs .subtab').forEach(b=>b.addEventListener('click',()=>selectMapaSubtab(b.dataset.sheet)));
 }
 document.addEventListener('DOMContentLoaded',boot);

@@ -2,8 +2,20 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JetFor · Mapa de Controle de Manutenção — PT-LJQ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>JetFor · Controle de Manutenção</title>
+<!-- PWA -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#14284B">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="JetFor Mnt">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="Controle de manutenção da frota JetFor — mapa dinâmico, obrigações MGM/SASC, DA e boletins.">
 <style>
   :root{
     --navy:#14284B; --navy2:#22406E; --gold:#C79A3B; --grey:#5A5A5A;
@@ -127,8 +139,11 @@
   #view-inicio .tag.g{background:#e2efda;color:#2E5A2E} #view-inicio .tag.s{background:#fff2cc;color:#7A3B00}
   #view-inicio .freq{font-weight:600;color:var(--navy)}
   #view-inicio .note{font-size:12px;color:#6b7280;margin-top:14px;line-height:1.5}
+  /* ---- barra da aeronave + sub-abas do mapa ---- */
+  .acbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px}
+  .acbadge{background:var(--navy);color:#fff;font-size:12px;font-weight:700;padding:6px 12px;border-radius:8px;white-space:nowrap}
   /* ---- DA/Boletins ---- */
-  .subtabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  .subtabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:0}
   .subtab{background:#fff;border:1px solid var(--line);border-radius:8px 8px 0 0;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;color:var(--navy2)}
   .subtab.active{background:var(--navy2);color:#fff;border-color:var(--navy2)}
   .stale{background:var(--warnbg);border:1px solid #e1c877;color:#7a5b12;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px}
@@ -157,6 +172,33 @@
   #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;
          padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;z-index:80;pointer-events:none}
   #toast.show{opacity:1}
+  /* ---- responsivo (tablet/celular) ---- */
+  @media (max-width:860px){
+    .mbody{grid-template-columns:1fr}
+    .mbody .full{grid-column:1}
+    .modal{width:100%}
+  }
+  @media (max-width:640px){
+    header{position:static;flex-wrap:wrap;padding:8px 12px;gap:8px}
+    header img{height:26px}
+    header .t1{font-size:13px} header .t2{font-size:9.5px}
+    header .spacer{flex:1 0 100%;display:block;height:0}
+    header .badge{order:5} header .btn{padding:6px 9px;font-size:11px}
+    .topnav{position:static;top:auto;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 6px}
+    .navbtn{padding:9px 11px;font-size:12px;white-space:nowrap}
+    .wrap{padding:10px}
+    .panel h2{font-size:12px;padding:9px 12px}
+    .pbody{padding:10px 12px}
+    .cgrid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+    .toolbar{gap:6px;padding:8px 10px}
+    .toolbar input[type=text]{min-width:100%;order:-1}
+    .toolbar select{flex:1}
+    .kpis{width:100%;margin-left:0;justify-content:space-between}
+    thead th{position:static}
+    .acbar{gap:8px} .acbadge{font-size:11px;padding:5px 10px}
+    #view-inicio .fleet{grid-template-columns:1fr}
+    #view-inicio .kpis2{grid-template-columns:repeat(2,1fr)}
+  }
   /* print */
   @media print{
     body{background:#fff;font-size:10px}
@@ -186,12 +228,27 @@
   <button class="navbtn active" data-view="inicio">🏠 Início</button>
   <button class="navbtn" data-view="mapa">🛠 Mapa de Manutenção</button>
   <button class="navbtn" data-view="obrig">📋 Obrigações MGM (SASC / PMAC)</button>
-  <button class="navbtn" data-view="dabol">📄 DA &amp; Boletins</button>
 </nav>
 
 <div class="wrap" id="view-inicio"></div>
 
 <div class="wrap" id="view-mapa" style="display:none">
+
+  <div class="acbar">
+    <span class="acbadge" id="acbadge">✈ PT-LJQ · Cessna S550 · S/N S550-0113</span>
+    <div class="subtabs" id="mapaSubtabs">
+      <button class="subtab active" data-sheet="mapa">Mapa de Manutenção</button>
+      <button class="subtab" data-sheet="celula">DA — Célula</button>
+      <button class="subtab" data-sheet="m1">DA — Motor 1</button>
+      <button class="subtab" data-sheet="m2">DA — Motor 2</button>
+      <button class="subtab" data-sheet="bm1">BOL — Motor 1</button>
+      <button class="subtab" data-sheet="bm2">BOL — Motor 2</button>
+    </div>
+  </div>
+
+  <div id="mapa-sheet" style="display:none"></div>
+
+  <div id="mapa-main">
 
   <!-- COUNTERS -->
   <div class="panel" id="counters">
@@ -235,11 +292,10 @@
   <p class="muted" style="font-size:11px;text-align:center">
     Jet For Aviation Ltda · Direção de Manutenção · Protótipo dinâmico (Fase 2) — dados migrados do Excel PT-LJQ.
   </p>
+  </div><!-- /mapa-main -->
 </div>
 
 <div class="wrap" id="view-obrig" style="display:none"></div>
-
-<div class="wrap" id="view-dabol" style="display:none"></div>
 
 <!-- EDIT MODAL -->
 <div class="overlay" id="overlay">
@@ -296,5 +352,10 @@
 <script src="dash_data.js"></script>
 <script src="da_data.js"></script>
 <script src="app.js"></script>
+<script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+  }
+</script>
 </body>
 </html>
