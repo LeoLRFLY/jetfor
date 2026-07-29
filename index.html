@@ -96,7 +96,47 @@
   .basetag.m1{background:#e7f0ff;color:#1c5bb8} .basetag.m2{background:#fdeee6;color:#b8631c}
   .basetag.cal{background:#f0ebf9;color:#6b3fa0}
   .obscell{max-width:200px;font-size:11px;color:#4a5261;white-space:normal;line-height:1.25}
+  /* coluna S/N (3ª) reduzida pela metade */
+  #tbl th:nth-child(3),#tbl td:nth-child(3){max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px}
   .act button{margin-right:4px}
+  /* ---- DASHBOARD (Início) — estilos scopados ---- */
+  #view-inicio .kpis2{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px}
+  #view-inicio .kpi2{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  #view-inicio .kpi2 .n{font-size:30px;font-weight:800;color:var(--navy)}
+  #view-inicio .kpi2 .l{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.03em}
+  #view-inicio .kpi2.sasc .n{color:#2E7D32} #view-inicio .kpi2.non .n{color:#7A7F87}
+  #view-inicio h2{font-size:16px;color:var(--navy);margin:22px 0 10px;padding:0 0 6px;border:none;border-bottom:2px solid var(--gold);background:none}
+  #view-inicio .fleet{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+  #view-inicio .ac{background:#fff;border:1px solid var(--line);border-left:5px solid #7A7F87;border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.05);transition:box-shadow .15s,transform .15s}
+  #view-inicio .ac.sasc{border-left-color:#2E7D32}
+  #view-inicio .ac.clik{cursor:pointer} #view-inicio .ac.clik:hover{box-shadow:0 4px 14px rgba(20,40,75,.18);transform:translateY(-2px)}
+  #view-inicio .ac .mat{font-weight:800;font-size:16px;color:var(--navy)}
+  #view-inicio .ac .mod{font-size:13px;margin:2px 0 8px}
+  #view-inicio .ac .row{font-size:12px;color:#6b7280;margin-top:6px} #view-inicio .ac .row b{color:#1f2733;font-weight:600}
+  #view-inicio .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;color:#fff}
+  #view-inicio .badge.s{background:#2E7D32} #view-inicio .badge.n{background:#7A7F87}
+  #view-inicio .verMapa{display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:var(--gold)}
+  #view-inicio .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+  #view-inicio .filters select,#view-inicio .filters input{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;background:#fff}
+  #view-inicio .filters input{flex:1;min-width:160px}
+  #view-inicio table.dash{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:13px}
+  #view-inicio table.dash th{background:var(--navy2);color:#fff;text-align:left;padding:9px 11px;font-size:12px;position:static}
+  #view-inicio table.dash td{padding:9px 11px;border-top:1px solid var(--line)}
+  #view-inicio table.dash tr:nth-child(even) td{background:#f7f9fc}
+  #view-inicio .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
+  #view-inicio .tag.g{background:#e2efda;color:#2E5A2E} #view-inicio .tag.s{background:#fff2cc;color:#7A3B00}
+  #view-inicio .freq{font-weight:600;color:var(--navy)}
+  #view-inicio .note{font-size:12px;color:#6b7280;margin-top:14px;line-height:1.5}
+  /* ---- DA/Boletins ---- */
+  .subtabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  .subtab{background:#fff;border:1px solid var(--line);border-radius:8px 8px 0 0;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;color:var(--navy2)}
+  .subtab.active{background:var(--navy2);color:#fff;border-color:var(--navy2)}
+  .stale{background:var(--warnbg);border:1px solid #e1c877;color:#7a5b12;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px}
+  table.da{border-collapse:collapse;width:100%;font-size:11px}
+  table.da th{background:var(--navy2);color:#fff;padding:6px 7px;text-align:left;position:sticky;top:0;font-size:10px;white-space:nowrap}
+  table.da td{padding:5px 7px;border-bottom:1px solid #eceff4;vertical-align:top}
+  table.da tr:nth-child(even) td{background:var(--zebra)}
+  table.da .dasec td{background:#dfe5f0!important;font-weight:700;color:var(--navy)}
   .muted{color:#9aa3b2}
   .disp-neg{color:var(--od);font-weight:700}
   /* ---- modal ---- */
@@ -143,11 +183,15 @@
 </header>
 
 <nav class="topnav no-print">
-  <button class="navbtn active" data-view="mapa">🛠 Mapa de Manutenção</button>
+  <button class="navbtn active" data-view="inicio">🏠 Início</button>
+  <button class="navbtn" data-view="mapa">🛠 Mapa de Manutenção</button>
   <button class="navbtn" data-view="obrig">📋 Obrigações MGM (SASC / PMAC)</button>
+  <button class="navbtn" data-view="dabol">📄 DA &amp; Boletins</button>
 </nav>
 
-<div class="wrap" id="view-mapa">
+<div class="wrap" id="view-inicio"></div>
+
+<div class="wrap" id="view-mapa" style="display:none">
 
   <!-- COUNTERS -->
   <div class="panel" id="counters">
@@ -194,6 +238,8 @@
 </div>
 
 <div class="wrap" id="view-obrig" style="display:none"></div>
+
+<div class="wrap" id="view-dabol" style="display:none"></div>
 
 <!-- EDIT MODAL -->
 <div class="overlay" id="overlay">
@@ -247,6 +293,8 @@
 <script src="config.js"></script>
 <script src="data.js"></script>
 <script src="freq_data.js"></script>
+<script src="dash_data.js"></script>
+<script src="da_data.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

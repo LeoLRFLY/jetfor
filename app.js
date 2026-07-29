@@ -344,11 +344,104 @@ function renderObrig(){
     `<p class="muted" style="font-size:11px;text-align:center">Fonte: MGM Rev 9.01 · IS 120-016 · RBAC 135.411/415/417 — documento de apoio, confira sempre a revisão vigente.</p>`;
   el.dataset.done='1';
 }
+// ---------- INÍCIO (Dashboard da frota) ----------
+function renderInicio(){
+  const D=window.JETFOR_DASH; if(!D) return;
+  const el=$('#view-inicio'); if(el.dataset.done) return;
+  const fleet=D.fleet, ats=D.atividades;
+  const nS=fleet.filter(f=>f.sasc).length, nN=fleet.length-nS;
+  const g=ats.filter(a=>a.escopo==='Geral').length, s=ats.length-g;
+  el.innerHTML=`
+    <div class="kpis2" id="dashKpis"></div>
+    <h2>Frota &amp; Enquadramento SASC</h2>
+    <div class="fleet" id="dashFleet"></div>
+    <h2>Atividades &amp; Frequências</h2>
+    <div class="filters">
+      <select id="dEsc"><option value="">Escopo: todos</option><option value="Geral">Geral (toda a frota)</option><option value="SASC">Somente SASC</option></select>
+      <select id="dFreq"></select>
+      <input id="dBusca" placeholder="Buscar atividade ou norma..."/>
+    </div>
+    <table class="dash"><thead><tr><th style="width:44%">Atividade</th><th>Frequência</th><th>Base</th><th>Escopo</th></tr></thead><tbody id="dTb"></tbody></table>
+    <div class="note" id="dCount"></div>
+    <div class="note"><b>Como ler:</b> atividades <span class="tag g">Geral</span> valem para toda a frota; <span class="tag s">SASC</span> aplicam-se só às aeronaves 10+ assentos (PMAC/SASC). Clique no card de uma aeronave com mapa para abrir o controle dela. Classificação SASC pela configuração de assentos certificada no TCDS (excluindo piloto), não pelo prefixo.</div>`;
+  // KPIs
+  $('#dashKpis').innerHTML=[['Aeronaves',fleet.length,''],['Frota SASC',nS,'sasc'],['Não-SASC',nN,'non'],['Ativ. gerais',g,''],['Ativ. SASC',s,'sasc']]
+    .map(k=>`<div class="kpi2 ${k[2]}"><div class="n">${k[1]}</div><div class="l">${k[0]}</div></div>`).join('');
+  // Fleet cards (PT-LJQ e afins clicáveis)
+  $('#dashFleet').innerHTML=fleet.map((f,i)=>{
+    const clic=f.mapa?'clik':'';
+    return `<div class="ac ${f.sasc?'sasc':''} ${clic}" data-mapa="${f.mapa||''}">
+      <div class="mat">${esc(f.mat)}</div><div class="mod">${esc(f.modelo)}</div>
+      <span class="badge ${f.sasc?'s':'n'}">${f.sasc?'SASC':'NÃO-SASC'}</span>
+      <span class="badge n" style="background:#22406E">${esc(f.enq)}</span>
+      <div class="row"><b>TCDS:</b> ${esc(f.tcds)}</div>
+      <div class="row"><b>Assentos (excl. piloto):</b> ${esc(f.assentos)}</div>
+      <div class="row">${esc(f.obs)}</div>
+      ${f.mapa?`<div class="verMapa">Ver mapa de manutenção →</div>`:`<div class="row" style="color:#b0b6c0">Mapa em breve</div>`}
+    </div>`;}).join('');
+  $('#dashFleet').querySelectorAll('.ac.clik').forEach(card=>{
+    card.addEventListener('click',()=>switchView('mapa'));
+  });
+  // filtros atividades
+  const freqs=[...new Set(ats.map(a=>a.freq))];
+  $('#dFreq').innerHTML='<option value="">Frequência: todas</option>'+freqs.map(x=>`<option>${esc(x)}</option>`).join('');
+  function draw(){
+    const esc_=$('#dEsc').value, fq=$('#dFreq').value, q=($('#dBusca').value||'').toLowerCase();
+    const rows=ats.filter(a=>{
+      if(esc_&&a.escopo!==esc_) return false;
+      if(fq&&a.freq!==fq) return false;
+      if(q&&!(a.atv.toLowerCase().includes(q)||a.base.toLowerCase().includes(q))) return false;
+      return true;
+    });
+    $('#dTb').innerHTML=rows.map(a=>`<tr><td>${esc(a.atv)}</td><td class="freq">${esc(a.freq)}</td><td>${esc(a.base)}</td><td><span class="tag ${a.escopo==='SASC'?'s':'g'}">${a.escopo}</span></td></tr>`).join('')||'<tr><td colspan="4" style="color:#999">Nenhuma atividade com esses filtros.</td></tr>';
+    $('#dCount').textContent=rows.length+' de '+ats.length+' atividades exibidas.';
+  }
+  ['dEsc','dFreq'].forEach(id=>$('#'+id).addEventListener('change',draw));
+  $('#dBusca').addEventListener('input',draw);
+  draw();
+  el.dataset.done='1';
+}
+
+// ---------- DA & BOLETINS ----------
+function renderDABOL(){
+  const DA=window.JETFOR_DA; if(!DA) return;
+  const el=$('#view-dabol'); if(el.dataset.done) return;
+  const keys=['celula','m1','m2','bm1','bm2'];
+  const tabs=keys.map((k,i)=>`<button class="subtab ${i===0?'active':''}" data-da="${k}">${esc(DA.sheets[k].title)}</button>`).join('');
+  el.innerHTML=`<div class="panel"><div class="pbody">
+    <div class="subtabs">${tabs}</div>
+    <div id="daBody"></div>
+  </div></div>`;
+  function drawSheet(k){
+    const sh=DA.sheets[k];
+    let h='';
+    if(sh.stale) h+=`<div class="stale">⚠ Esta aba veio do Excel com dados de <b>outra aeronave</b> (template). Substituir pelos boletins reais do S550 quando disponíveis.</div>`;
+    if(sh.info&&sh.info.length) h+=`<p class="lead" style="margin-bottom:8px">${sh.info.map(esc).join(' · ')}</p>`;
+    h+=`<div class="tblwrap"><table class="da"><thead><tr>${DA.cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>`;
+    sh.rows.forEach(r=>{
+      if(r.sec!==undefined){ h+=`<tr class="dasec"><td colspan="${DA.cols.length}">${esc(r.sec)}</td></tr>`; return; }
+      h+=`<tr>${r.c.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`;
+    });
+    h+=`</tbody></table></div>`;
+    $('#daBody').innerHTML=h;
+  }
+  el.querySelectorAll('.subtab').forEach(b=>b.addEventListener('click',()=>{
+    el.querySelectorAll('.subtab').forEach(x=>x.classList.toggle('active',x===b));
+    drawSheet(b.dataset.da);
+  }));
+  drawSheet('celula');
+  el.dataset.done='1';
+}
+
 function switchView(v){
   document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
+  $('#view-inicio').style.display = v==='inicio'?'':'none';
   $('#view-mapa').style.display = v==='mapa'?'':'none';
   $('#view-obrig').style.display = v==='obrig'?'':'none';
+  $('#view-dabol').style.display = v==='dabol'?'':'none';
+  if(v==='inicio') renderInicio();
   if(v==='obrig') renderObrig();
+  if(v==='dabol') renderDABOL();
   window.scrollTo(0,0);
 }
 
@@ -366,6 +459,7 @@ function boot(){
   };
   $('#acinfo').textContent = `${seed.aeronave.matricula} · ${seed.aeronave.modelo} · S/N ${seed.aeronave.sn} · ${seed.aeronave.ano}`;
   renderAll();
+  renderInicio();   // página inicial (dashboard) é a padrão
   initFirebase();
 
   // eventos

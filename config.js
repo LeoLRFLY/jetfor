@@ -11,12 +11,13 @@
 // ============================================================
 
 window.FIREBASE_CONFIG = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "AIzaSyAOpuGrHLx3FEiJl2TdMYqi8TXX12qGyG4",
+  authDomain: "jetfor-23189.firebaseapp.com",
+  projectId: "jetfor-23189",
+  storageBucket: "jetfor-23189.firebasestorage.app",
+  messagingSenderId: "1075684658017",
+  appId: "1:1075684658017:web:c2feb4c16eaf486fd29320",
+  measurementId: "G-LZEQZ4RDV8"
 };
 
 // Nome da coleção e do documento no Firestore (pode manter assim)
