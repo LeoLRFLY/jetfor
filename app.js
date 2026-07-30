@@ -152,7 +152,7 @@ function subscribeAC(ac){
     if(d.docs) m.docs=d.docs;
     if(d.docCatsExtra) m.docCatsExtra=d.docCatsExtra;
     if(d.grupos) m.grupos=d.grupos;
-    migrateEngineCounters(m); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac);
+    migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac);
     if(ac===STATE.currentAC){ STATE.contadores=m.contadores; STATE.tarefas=m.tarefas; renderCounters(); renderTable(); }
   });
 }
@@ -225,7 +225,32 @@ function reclassGroups(m, ac){
     if(ref!=null){ if(c.helice2_tsn==null) c.helice2_tsn=ref; if(c.helice2_tso==null) c.helice2_tso=ref; if(c.helice2_horas==null) c.helice2_horas=ref; }
   }
 }
-function migrateMapsFull(){ Object.keys(STATE.acmaps||{}).forEach(ac=>{ const m=STATE.acmaps[ac]; migrateEngineCounters(m); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac); }); }
+// reconstrói o mapa IDÊNTICO ao Excel (window.JETFOR_FULL[ac]) preservando as baixas do usuário.
+// Substitui m.tarefas pela lista fiel; transfere exec/cal/obs/hist de quem já tem baixa (por nome + ordem de ocorrência).
+function applyFullRebuild(m, ac){
+  if(!window.JETFOR_FULL || !window.JETFOR_FULL[ac]) return;
+  const target = window.JETFOR_FULL[ac];
+  const cur = m.tarefas || [];
+  const byName = {};
+  cur.forEach(t=>{ const k=normName(t.nome); (byName[k]=byName[k]||[]).push(t); });
+  m.tarefas = target.map((it,idx)=>{
+    const nt = JSON.parse(JSON.stringify(it));
+    if(nt.id==null) nt.id = ac+'-F'+idx;
+    const k = normName(it.nome);
+    const q = byName[k];
+    const match = q && q.length ? q.shift() : null;
+    if(match && Array.isArray(match.hist) && match.hist.length){
+      // usuário já deu baixa: a baixa dele prevalece sobre o Excel
+      nt.hist = match.hist;
+      if(match.exec!=null) nt.exec = match.exec;
+      if(match.vencFixo!=null) nt.vencFixo = match.vencFixo;
+      if(match.cal && match.cal.exec) nt.cal = match.cal;
+      if(match.obs) nt.obs = match.obs;
+    }
+    return nt;
+  });
+}
+function migrateMapsFull(){ Object.keys(STATE.acmaps||{}).forEach(ac=>{ const m=STATE.acmaps[ac]; migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac); }); }
 function buildCounterGroups(){
   const ac = (cur()&&cur().aeronave)||{};
   const nM = ac.nMotores!=null? ac.nMotores : 2;
