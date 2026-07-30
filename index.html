@@ -108,6 +108,9 @@
   .basetag.m1{background:#e7f0ff;color:#1c5bb8} .basetag.m2{background:#fdeee6;color:#b8631c}
   .basetag.cal{background:#f0ebf9;color:#6b3fa0}
   .obscell{max-width:200px;font-size:11px;color:#4a5261;white-space:normal;line-height:1.25}
+  #tbl th.sel,#tbl td.sel{width:24px;text-align:center}
+  #tbl th.nrcol,#tbl td.nrcol{width:30px;text-align:right;color:#8a94a6;font-variant-numeric:tabular-nums}
+  #tbl .rowchk{cursor:pointer}
   /* coluna S/N (3ª) reduzida pela metade */
   #tbl th:nth-child(3),#tbl td:nth-child(3){max-width:26px;width:26px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
   .act button{margin-right:4px}
@@ -269,6 +272,11 @@
   .fsign-line{margin-bottom:2px;color:#33404f}
   .floc{margin-top:8px;font-size:11.5px;color:#33404f}
   .fobs{margin-top:12px;font-size:10.5px;color:#8a94a6;font-style:italic}
+  .osdoc{font-size:12px} .osdoc .fh{border-bottom:2px solid var(--gold);padding-bottom:8px;margin-bottom:12px;display:flex;justify-content:space-between}
+  .osdoc .fh-jf{font-weight:800;color:var(--navy);font-size:15px;display:block} .osdoc .fh-emp{font-size:10px;color:var(--grey)}
+  .osdoc .fh-r{text-align:right} .osdoc .fh-min{font-size:10px;color:#8a94a6}
+  @media print{ #osOverlay.show{position:static;background:#fff} #osOverlay .mfoot,#osOverlay h3{display:none}
+    #osOverlay .modal{box-shadow:none;width:100%} body>*:not(#osOverlay){display:none} }
   .fp{font-size:12.5px;color:#33404f;line-height:1.5;margin:6px 0 10px}
   .chkcol{display:flex;flex-direction:column;gap:5px;margin:4px 0}
   .fin{border:none;border-bottom:1px solid var(--line);padding:2px 4px;font-size:12px;width:120px}
@@ -358,11 +366,14 @@
         <option value="ok">🟢 Em dia</option>
       </select>
       <button class="btn p sm" id="btnAdd">+ Nova tarefa</button>
+      <button class="btn g sm no-print" id="btnOS" style="display:none">🧾 Gerar O.S. (<span id="osCount">0</span>)</button>
       <div class="kpis" id="kpis"></div>
     </div>
     <div class="tblwrap">
       <table id="tbl">
         <thead><tr>
+          <th class="no-print sel"><input type="checkbox" id="chkAll" title="Selecionar todos"></th>
+          <th class="num nrcol">#</th>
           <th>Nomenclatura</th><th>P/N</th><th>S/N</th><th>Base</th>
           <th class="num">Intervalo</th><th class="num">Últ. Exec.</th>
           <th class="num">Vence (VENC)</th><th class="num">Restante (DISP)</th>
@@ -452,6 +463,15 @@
       <button class="btn o" id="acDelete" style="color:var(--od)">🗑 Remover</button>
       <div><button class="btn o" id="acCancel">Cancelar</button><button class="btn p" id="acOk">Salvar</button></div>
     </div>
+  </div>
+</div>
+<!-- ORDEM DE SERVIÇO -->
+<div class="overlay" id="osOverlay">
+  <div class="modal" style="width:820px;max-width:100%">
+    <h3>Ordem de Serviço (rascunho)</h3>
+    <div class="mbody" style="display:block" id="osBody"></div>
+    <div class="mfoot"><span class="muted" style="font-size:11px">Rascunho a partir dos itens selecionados — a emissão/registro será implementada depois.</span>
+      <div><button class="btn o" id="osClose">Fechar</button><button class="btn p" onclick="window.print()">🖨 Imprimir / PDF</button></div></div>
   </div>
 </div>
 <div id="toast"></div>

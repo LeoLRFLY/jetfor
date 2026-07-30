@@ -177,6 +177,7 @@ function renderTable(){
   const order=[]; const byG={};
   STATE.tarefas.forEach(t=>{ if(!byG[t.grupo]){ byG[t.grupo]=[]; order.push(t.grupo); } byG[t.grupo].push(t); });
 
+  let nr=0;
   order.forEach(gname=>{
     const rows=byG[gname];
     const visible=[];
@@ -194,9 +195,13 @@ function renderTable(){
     if(!visible.length) return;
     // linha de grupo
     const gr=document.createElement('tr'); gr.className='grp';
-    gr.innerHTML=`<td colspan="12">${gname}</td>`; tb.appendChild(gr);
-    visible.forEach(([t,c])=>tb.appendChild(rowEl(t,c)));
+    gr.innerHTML=`<td colspan="14">${gname}</td>`; tb.appendChild(gr);
+    visible.forEach(([t,c])=>{ nr++; tb.appendChild(rowEl(t,c,nr)); });
   });
+  // seleção / O.S.
+  const chkAll=$('#chkAll'); if(chkAll) chkAll.checked=false;
+  tb.querySelectorAll('.rowchk').forEach(cb=>cb.addEventListener('change',updateOSsel));
+  updateOSsel();
 
   // KPIs
   $('#kpis').innerHTML =
@@ -206,13 +211,45 @@ function renderTable(){
     `<span class="kpi ok">🟢 ${counts.ok}</span>`;
 }
 
+// ---------- seleção / Ordem de Serviço ----------
+function selectedIds(){ return [...document.querySelectorAll('#tbl .rowchk:checked')].map(c=>c.dataset.id); }
+function updateOSsel(){
+  const n=selectedIds().length;
+  const b=$('#btnOS'); if(!b) return;
+  $('#osCount').textContent=n;
+  b.style.display = n>0 ? '' : 'none';
+}
+function gerarOS(){
+  const ids=selectedIds(); if(!ids.length) return;
+  const m=cur(); const a=m.aeronave||{};
+  const items=ids.map(id=>m.tarefas.find(t=>t.id===id)).filter(Boolean);
+  const linhas=items.map((t,i)=>{
+    const c=compute(t);
+    const venc=c.num&&c.num.venc!=null?fmtN(c.num.venc,1)+' '+(c.num.unit||''):(c.cal?fmtDate(c.cal.venc):'—');
+    const disp=c.num&&c.num.disp!=null?fmtN(c.num.disp,1)+' '+(c.num.unit||''):(c.cal&&c.cal.disp!=null?c.cal.disp+'d':'—');
+    return `<tr><td>${i+1}</td><td>${esc(t.nome)}</td><td>${esc(t.pn||'')}</td><td>${esc(t.sn||'')}</td><td>${esc(BASE_LABEL[t.base]||t.base)}</td><td>${venc}</td><td>${disp}</td><td style="width:120px"></td></tr>`;
+  }).join('');
+  const hoje=new Date(STATE.hoje||todayISO()).toLocaleDateString('pt-BR');
+  $('#osBody').innerHTML=`
+    <div class="osdoc">
+      <div class="fh"><div class="fh-l"><span class="fh-jf">✈ JETFOR</span><span class="fh-emp">JETFOR TÁXI AÉREO LTDA. · COA 2007-07-2CHQ-02-02</span></div>
+        <div class="fh-r"><b>ORDEM DE SERVIÇO</b><br><span class="fh-min">Nº _______ · Data ${hoje}</span></div></div>
+      <table class="ff"><tr><th>Aeronave</th><td>${esc(a.matricula||STATE.currentAC)}</td><th>Modelo</th><td>${esc(a.modelo||'')}</td><th>S/N</th><td>${esc(a.sn||'')}</td></tr>
+        <tr><th>Oficina executante (RBAC 145)</th><td colspan="5"><input></td></tr></table>
+      <div class="fsec">Itens a executar (${items.length})</div>
+      <table class="ff grid"><tr><th>#</th><th>Nomenclatura</th><th>P/N</th><th>S/N</th><th>Base</th><th>Vence</th><th>Restante</th><th>Executado / Rubrica</th></tr>${linhas}</table>
+      <div class="fsign"><div class="fsign-line">_______________________________________</div>Diretor de Manutenção — Leonardo Filipe de Araujo · Cód. ANAC 133125
+        <div class="floc">Local e data: Fortaleza, ______ de ________________ de ________.</div></div>
+    </div>`;
+  $('#osOverlay').classList.add('show');
+}
 function baseTagClass(base){
   if(base&&base.startsWith('motor1')) return 'm1';
   if(base&&base.startsWith('motor2')) return 'm2';
   if(base==='calendario') return 'cal';
   return '';
 }
-function rowEl(t,c){
+function rowEl(t,c,n){
   const tr=document.createElement('tr'); tr.className=c.status;
   const unit = c.num? c.num.unit : '';
   const venc = c.num? (c.num.venc!=null? fmtN(c.num.venc,1)+' '+unit : '—') : '—';
@@ -231,6 +268,8 @@ function rowEl(t,c){
   const pill = `<span class="pill ${c.status}">${c.status==='od'?'VENCIDO':c.status==='wn'?'PRÓXIMO':'EM DIA'}</span>`;
   const obs = t.obs ? `<span title="${esc(t.obs)}">${esc(t.obs)}</span>` : '<span class="muted">—</span>';
   tr.innerHTML =
+    `<td class="sel no-print"><input type="checkbox" class="rowchk" data-id="${esc(t.id)}"></td>`+
+    `<td class="nrcol">${n}</td>`+
     `<td>${esc(t.nome)}</td>`+
     `<td class="muted">${esc(t.pn||'')}</td>`+
     `<td class="muted" title="${esc(t.sn||'')}">${esc(t.sn||'')}</td>`+
@@ -647,6 +686,10 @@ function boot(){
   $('#btnDelete').addEventListener('click',deleteTask);
   $('#btnSave').addEventListener('click',saveAll);
   $('#btnExport').addEventListener('click',exportJSON);
+  $('#chkAll').addEventListener('change',e=>{ document.querySelectorAll('#tbl .rowchk').forEach(cb=>cb.checked=e.target.checked); updateOSsel(); });
+  $('#btnOS').addEventListener('click',gerarOS);
+  $('#osClose').addEventListener('click',()=>$('#osOverlay').classList.remove('show'));
+  $('#osOverlay').addEventListener('click',e=>{ if(e.target.id==='osOverlay') $('#osOverlay').classList.remove('show'); });
   $('#btnImport').addEventListener('click',()=>$('#fileImport').click());
   $('#fileImport').addEventListener('change',e=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=''; });
   $('#overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
