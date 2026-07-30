@@ -182,6 +182,7 @@ function renderTable(){
     const rows=byG[gname];
     const visible=[];
     rows.forEach(t=>{
+      if(t.categoria==='ica') return;   // ICA/Documentos vão em aba separada
       const c=compute(t);
       counts.all++; counts[c.status]++;
       if(fg && t.grupo!==fg) return;
@@ -242,6 +243,7 @@ function gerarOS(){
         <div class="floc">Local e data: Fortaleza, ______ de ________________ de ________.</div></div>
     </div>`;
   $('#osOverlay').classList.add('show');
+  document.body.classList.add('osopen');
 }
 function baseTagClass(base){
   if(base&&base.startsWith('motor1')) return 'm1';
@@ -541,15 +543,40 @@ function renderMapaSheet(k){
   h+=`</tbody></table></div></div></div>`;
   $('#mapa-sheet').innerHTML=h;
 }
+function renderICA(){
+  const ica=(STATE.tarefas||[]).filter(t=>t.categoria==='ica');
+  let h=`<div class="panel"><h2><span class="tag">ICA</span> ICA / Grandes Modificações — ${esc(STATE.currentAC)}</h2><div class="pbody">`;
+  if(!ica.length){ h+='<p class="lead">Nenhum item de ICA/Grandes Modificações nesta aeronave.</p></div></div>'; $('#mapa-sheet').innerHTML=h; return; }
+  h+=`<div class="tblwrap"><table class="da"><thead><tr><th>#</th><th>Nomenclatura</th><th>P/N</th><th>Tipo</th><th class="num">Intervalo</th><th class="num">Vence</th><th class="num">Restante</th><th>Calendário</th><th>Obs</th><th>Status</th><th class="no-print">Ações</th></tr></thead><tbody>`;
+  ica.forEach((t,i)=>{
+    const c=compute(t); const unit=c.num?c.num.unit:'';
+    const venc=c.num&&c.num.venc!=null?fmtN(c.num.venc,1)+' '+unit:'—';
+    const disp=c.num&&c.num.disp!=null?`<span class="${c.num.disp<0?'disp-neg':''}">${fmtN(c.num.disp,1)} ${unit}</span>`:'—';
+    let cal='—'; if(c.cal){const dd=c.cal.disp;cal=`${fmtDate(c.cal.venc)} <span class="${dd!=null&&dd<0?'disp-neg':''}">(${dd!=null?dd+'d':'—'})</span>`;}
+    const inter=t.intervalo!=null?fmtN(t.intervalo,0)+(t.tipoVenc==='calendario'?'M':' '+unit):'—';
+    const pill=`<span class="pill ${c.status}">${c.status==='od'?'VENCIDO':c.status==='wn'?'PRÓXIMO':'EM DIA'}</span>`;
+    h+=`<tr class="${c.status}"><td class="nrcol">${i+1}</td><td>${esc(t.nome)}</td><td class="muted">${esc(t.pn||'')}</td>`+
+       `<td><span class="basetag ${t.tipoVenc==='calendario'?'cal':''}">${TIPO_LABEL[t.tipoVenc]||t.tipoVenc}</span></td>`+
+       `<td class="num">${inter}</td><td class="num">${venc}</td><td class="num">${disp}</td><td>${cal}</td>`+
+       `<td class="obscell">${t.obs?esc(t.obs):'<span class=muted>—</span>'}</td><td>${pill}</td>`+
+       `<td class="act no-print"><button class="btn o sm" data-edit="${esc(t.id)}">✎</button></td></tr>`;
+  });
+  h+=`</tbody></table></div></div></div>`;
+  $('#mapa-sheet').innerHTML=h;
+  $('#mapa-sheet').querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>openModal(b.dataset.edit)));
+}
 function selectMapaSubtab(k){
   document.querySelectorAll('#mapaSubtabs .subtab').forEach(b=>b.classList.toggle('active',b.dataset.sheet===k));
   if(k==='mapa'){ $('#mapa-main').style.display=''; $('#mapa-sheet').style.display='none'; }
+  else if(k==='ica'){ $('#mapa-main').style.display='none'; renderICA(); $('#mapa-sheet').style.display=''; }
   else { $('#mapa-main').style.display='none'; renderMapaSheet(k); $('#mapa-sheet').style.display=''; }
   window.scrollTo(0,0);
 }
 function buildMapaSubtabs(){
   const da=cur().da||{sheets:{}}; const bar=$('#mapaSubtabs');
   let h='<button class="subtab active" data-sheet="mapa">Mapa de Manutenção</button>';
+  const temICA=(cur().tarefas||[]).some(t=>t.categoria==='ica');
+  if(temICA) h+='<button class="subtab" data-sheet="ica">ICA / Grandes Modificações</button>';
   Object.keys(da.sheets||{}).forEach(k=>{ h+=`<button class="subtab" data-sheet="${k}">${esc(da.sheets[k].title||k)}</button>`; });
   bar.innerHTML=h;
   bar.querySelectorAll('.subtab').forEach(b=>b.addEventListener('click',()=>selectMapaSubtab(b.dataset.sheet)));
@@ -688,8 +715,8 @@ function boot(){
   $('#btnExport').addEventListener('click',exportJSON);
   $('#chkAll').addEventListener('change',e=>{ document.querySelectorAll('#tbl .rowchk').forEach(cb=>cb.checked=e.target.checked); updateOSsel(); });
   $('#btnOS').addEventListener('click',gerarOS);
-  $('#osClose').addEventListener('click',()=>$('#osOverlay').classList.remove('show'));
-  $('#osOverlay').addEventListener('click',e=>{ if(e.target.id==='osOverlay') $('#osOverlay').classList.remove('show'); });
+  $('#osClose').addEventListener('click',()=>{ $('#osOverlay').classList.remove('show'); document.body.classList.remove('osopen'); });
+  $('#osOverlay').addEventListener('click',e=>{ if(e.target.id==='osOverlay'){ $('#osOverlay').classList.remove('show'); document.body.classList.remove('osopen'); } });
   $('#btnImport').addEventListener('click',()=>$('#fileImport').click());
   $('#fileImport').addEventListener('change',e=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=''; });
   $('#overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });

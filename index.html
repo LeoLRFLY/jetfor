@@ -276,8 +276,12 @@
   .osdoc{font-size:12px} .osdoc .fh{border-bottom:2px solid var(--gold);padding-bottom:8px;margin-bottom:12px;display:flex;justify-content:space-between}
   .osdoc .fh-jf{font-weight:800;color:var(--navy);font-size:15px;display:block} .osdoc .fh-emp{font-size:10px;color:var(--grey)}
   .osdoc .fh-r{text-align:right} .osdoc .fh-min{font-size:10px;color:#8a94a6}
-  @media print{ #osOverlay.show{position:static;background:#fff} #osOverlay .mfoot,#osOverlay h3{display:none}
-    #osOverlay .modal{box-shadow:none;width:100%} body>*:not(#osOverlay){display:none} }
+  @media print{
+    body.osopen > *:not(#osOverlay){display:none!important}
+    body.osopen #osOverlay{position:static;background:#fff;display:block}
+    body.osopen #osOverlay .mfoot, body.osopen #osOverlay h3{display:none}
+    body.osopen #osOverlay .modal{box-shadow:none;width:100%;max-width:100%}
+  }
   .fp{font-size:12.5px;color:#33404f;line-height:1.5;margin:6px 0 10px}
   .chkcol{display:flex;flex-direction:column;gap:5px;margin:4px 0}
   .fin{border:none;border-bottom:1px solid var(--line);padding:2px 4px;font-size:12px;width:120px}
