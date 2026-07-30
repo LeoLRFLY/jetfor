@@ -76,7 +76,7 @@ function compute(task){
 // STATE.acmaps = { 'PT-LJQ':{aeronave,contadores,tarefas,da}, ... }
 // STATE.contadores/tarefas apontam para a aeronave ativa (STATE.currentAC).
 function cur(){ return STATE.acmaps[STATE.currentAC]; }
-function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify({acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC,osProx:STATE.osProx})); }catch(e){} }
+function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify({acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC,osProx:STATE.osProx,docsGeral:STATE.docsGeral})); }catch(e){} }
 function loadLocal(){ try{ const s=localStorage.getItem('jetfor_mapa_v2'); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function acDoc(ac){ return DB.collection(window.FIRESTORE_COLECAO||'mapas').doc(ac); }
 
@@ -86,8 +86,8 @@ async function saveAll(){
     try{
       SUPPRESS=true;
       const m=cur();
-      await acDoc(STATE.currentAC).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),updatedAt:new Date().toISOString()});
-      await acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),updatedAt:new Date().toISOString()});
+      await acDoc(STATE.currentAC).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),docs:(m.docs||[]),updatedAt:new Date().toISOString()});
+      await acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),updatedAt:new Date().toISOString()});
       SUPPRESS=false;
       toast('✔ Salvo no Firebase (nuvem)');
     }catch(e){ SUPPRESS=false; toast('⚠ Erro ao salvar na nuvem — salvo local'); console.error(e); }
@@ -107,9 +107,10 @@ function initFirebase(){
     ONLINE = true; setBadge(true);
     // dados gerais (frota/hoje)
     acDoc('_geral').get().then(snap=>{
-      if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),updatedAt:new Date().toISOString()}); }
-      else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; }
+      if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),updatedAt:new Date().toISOString()}); }
+      else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; if(d.docsGeral) STATE.docsGeral=d.docsGeral; if(d.frota){ STATE.frota=d.frota; if($('#view-inicio').dataset.done) drawFleet(); } }
     }).catch(()=>{});
+    initStorage();
     seedAllAC();
     subscribeAC(STATE.currentAC);
   }catch(e){ console.error(e); ONLINE=false; setBadge(false); }
@@ -142,6 +143,7 @@ function subscribeAC(ac){
     if(d.aeronave) m.aeronave=d.aeronave;
     if(d.da) m.da=d.da;
     if(d.osHistorico) m.osHistorico=d.osHistorico;
+    if(d.docs) m.docs=d.docs;
     if(ac===STATE.currentAC){ STATE.contadores=m.contadores; STATE.tarefas=m.tarefas; renderCounters(); renderTable(); }
   });
 }
@@ -721,6 +723,7 @@ function selectMapaSubtab(k){
   if(k==='mapa'){ $('#mapa-main').style.display=''; $('#mapa-sheet').style.display='none'; }
   else if(k==='ica'){ $('#mapa-main').style.display='none'; renderICA(); $('#mapa-sheet').style.display=''; }
   else if(k==='hist'){ $('#mapa-main').style.display='none'; renderHistoricoOS(); $('#mapa-sheet').style.display=''; }
+  else if(k==='docs'){ $('#mapa-main').style.display='none'; renderDocs(STATE.currentAC); $('#mapa-sheet').style.display=''; }
   else { $('#mapa-main').style.display='none'; renderMapaSheet(k); $('#mapa-sheet').style.display=''; }
   window.scrollTo(0,0);
 }
@@ -731,6 +734,7 @@ function buildMapaSubtabs(){
   if(temICA) h+='<button class="subtab" data-sheet="ica">ICA / Grandes Modificações</button>';
   Object.keys(da.sheets||{}).forEach(k=>{ h+=`<button class="subtab" data-sheet="${k}">${esc(da.sheets[k].title||k)}</button>`; });
   h+='<button class="subtab" data-sheet="hist">Histórico de O.S.</button>';
+  h+='<button class="subtab" data-sheet="docs">📁 Documentos</button>';
   bar.innerHTML=h;
   bar.querySelectorAll('.subtab').forEach(b=>b.addEventListener('click',()=>selectMapaSubtab(b.dataset.sheet)));
 }
@@ -824,9 +828,11 @@ function switchView(v){
   $('#view-mapa').style.display = v==='mapa'?'':'none';
   $('#view-obrig').style.display = v==='obrig'?'':'none';
   $('#view-forms').style.display = v==='forms'?'':'none';
+  $('#view-geral').style.display = v==='geral'?'':'none';
   if(v==='inicio') renderInicio();
   if(v==='obrig') renderObrig();
   if(v==='forms') renderForms();
+  if(v==='geral') renderDocsGeral();
   window.scrollTo(0,0);
 }
 
@@ -849,7 +855,8 @@ function boot(){
     tarefas: acmaps[currentAC].tarefas,
     hoje: (local&&local.hoje) || todayISO(),
     frota: (local&&local.frota) || (window.JETFOR_DASH? window.JETFOR_DASH.fleet.map(x=>Object.assign({},x)) : []),
-    osProx: (local&&local.osProx) || {}
+    osProx: (local&&local.osProx) || {},
+    docsGeral: (local&&local.docsGeral) || []
   };
   const a=acmaps[currentAC].aeronave||{};
   const label=`${a.matricula||currentAC} · ${a.modelo||''}${a.sn?' · S/N '+a.sn:''}`;

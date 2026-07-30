@@ -334,6 +334,16 @@
     .panel{box-shadow:none;border:none;margin-bottom:6px} thead th{position:static}
     @page{size:A4 landscape;margin:8mm}
   }
+  /* ---- documentos (pastas) ---- */
+  .docup{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#f6f8fc;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0 16px}
+  .docup input[type=file]{font-size:12px}
+  .docup select,.docup input{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px}
+  .doccat{margin:14px 0}
+  .doccat h3{font-size:13px;color:var(--navy);margin:0 0 6px;padding-bottom:4px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
+  .docrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 8px;border:1px solid var(--line);border-radius:8px;margin-bottom:5px;background:#fff;font-size:13px}
+  .docrow a{color:var(--navy);font-weight:600;text-decoration:none;flex:1;min-width:200px}
+  .docrow a:hover{text-decoration:underline}
+  .docrow.muted{border-style:dashed;color:#9aa2ad;background:#fafbfc;font-style:italic}
 </style>
 </head>
 <body>
@@ -357,9 +367,11 @@
   <button class="navbtn" data-view="mapa">🛠 Mapa de Manutenção</button>
   <button class="navbtn" data-view="obrig">📋 Obrigações MGM (SASC / PMAC)</button>
   <button class="navbtn" data-view="forms">📝 Formulários</button>
+  <button class="navbtn" data-view="geral">📁 Pasta Geral</button>
 </nav>
 
 <div class="wrap" id="view-inicio"></div>
+<div class="wrap" id="view-geral" style="display:none"></div>
 
 <div class="wrap" id="view-mapa" style="display:none">
 
@@ -516,6 +528,7 @@
 <!-- Firebase (compat) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="config.js"></script>
 <script src="data.js"></script>
 <script src="freq_data.js"></script>
@@ -525,6 +538,7 @@
 <script src="iio_data.js"></script>
 <script src="forms.js"></script>
 <script src="app.js"></script>
+<script src="docs.js"></script>
 <script>
   if('serviceWorker' in navigator){
     window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
