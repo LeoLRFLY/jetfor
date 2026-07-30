@@ -275,8 +275,14 @@
   .fobs{margin-top:12px;font-size:10.5px;color:#8a94a6;font-style:italic}
   .osdoc{font-size:12px} .osdoc .fh{border-bottom:2px solid var(--gold);padding-bottom:8px;margin-bottom:12px;display:flex;justify-content:space-between}
   .osdoc .fh-jf{font-weight:800;color:var(--navy);font-size:15px;display:block} .osdoc .fh-emp{font-size:10px;color:var(--grey);display:block}
-  .osdoc .fh-logobox{display:inline-block;background:var(--navy);padding:6px 12px;border-radius:6px;margin-bottom:4px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .osdoc .fh-logo{height:30px;width:auto;display:block}
+  .osdoc .fh-logobox{display:inline-block;background:var(--navy);padding:6px 12px;border-radius:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .osdoc .fh-logo{height:28px;width:auto;display:block}
+  .osdoc .fsec{text-align:center;text-transform:uppercase;letter-spacing:.5px}
+  .osdoc .fsec.sub{background:var(--navy2)}
+  .osdoc table.oshead td.oslogo{width:130px;text-align:center;vertical-align:middle;background:#fff;padding:8px}
+  .osdoc table.oshead td.ostitle{text-align:center;font-weight:800;font-size:16px;color:var(--navy);letter-spacing:1px;background:#fff}
+  .osdoc table.oshead th{white-space:normal;text-align:center}
+  .osdoc table.oshead td{text-align:center}
   .osdoc .fh-r{text-align:right} .osdoc .fh-min{font-size:10px;color:#8a94a6}
   table.ff.util th{width:1%} table.ff.util td{padding:5px 8px;font-size:11.5px}
   table.ff.util td input{border-bottom:1px solid var(--line)}
@@ -292,9 +298,21 @@
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
     body.osopen > *:not(#osOverlay){display:none!important}
-    body.osopen #osOverlay{position:static;background:#fff;display:block}
+    body.osopen #osOverlay{position:static;background:#fff;display:block;overflow:visible;padding:0}
     body.osopen #osOverlay .mfoot, body.osopen #osOverlay h3{display:none}
-    body.osopen #osOverlay .modal{box-shadow:none;width:100%;max-width:100%}
+    body.osopen #osOverlay .modal{box-shadow:none;width:100%;max-width:100%;border-radius:0}
+    body.osopen #osOverlay .mbody{display:block;padding:0;overflow:visible;max-height:none}
+    /* O.S. em retrato: nada de linha/seção/tabela cortada entre páginas */
+    body.osopen .osdoc{font-size:10.5px}
+    body.osopen .osdoc .fh{break-inside:avoid}
+    body.osopen .fsec{break-inside:avoid;break-after:avoid;page-break-after:avoid}
+    body.osopen table.ff{break-inside:auto}
+    body.osopen table.ff.util{break-inside:avoid}
+    body.osopen table.ff tr{break-inside:avoid;page-break-inside:avoid}
+    body.osopen .ossvcs{break-inside:auto}
+    body.osopen .ossvc{break-inside:avoid;page-break-inside:avoid}
+    body.osopen .osdecl{break-inside:avoid;page-break-inside:avoid}
+    body.osopen .ossig{height:40px}
   }
   .fp{font-size:12.5px;color:#33404f;line-height:1.5;margin:6px 0 10px}
   .chkcol{display:flex;flex-direction:column;gap:5px;margin:4px 0}

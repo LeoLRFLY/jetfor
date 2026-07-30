@@ -110,8 +110,22 @@ function initFirebase(){
       if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),updatedAt:new Date().toISOString()}); }
       else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; }
     }).catch(()=>{});
+    seedAllAC();
     subscribeAC(STATE.currentAC);
   }catch(e){ console.error(e); ONLINE=false; setBadge(false); }
+}
+// grava no Firestore o doc completo de CADA aeronave que ainda não existe na nuvem
+function seedAllAC(){
+  if(!ONLINE||!DB) return;
+  Object.keys(STATE.acmaps||{}).forEach(ac=>{
+    acDoc(ac).get().then(snap=>{
+      if(!snap.exists){
+        const m=STATE.acmaps[ac];
+        acDoc(ac).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),updatedAt:new Date().toISOString()})
+          .catch(e=>console.error('seed '+ac,e));
+      }
+    }).catch(e=>console.error('seed get '+ac,e));
+  });
 }
 function subscribeAC(ac){
   if(!ONLINE||!DB) return;
@@ -233,7 +247,7 @@ function osBuildFromSelection(){
   const m=cur(); const a=m.aeronave||{}; const C=m.contadores||{};
   const ids=selectedIds(); const items=ids.map(id=>m.tarefas.find(t=>t.id===id)).filter(Boolean);
   const g=v=>v!=null?fmtN(v,1):'';
-  const nM=a.nMotores!=null?a.nMotores:2, nH=a.nHelices!=null?a.nHelices:0;
+  const nM=2, nH=2; // modelo padrão sempre traz Motor 1/2 e Hélice 1/2 (hélice em branco no jato)
   const iso=STATE.hoje||todayISO();
   const d={
     numero:osNextLabel().label,
@@ -254,9 +268,10 @@ function osLegacyData(e){
   const m=cur(); const a=m.aeronave||{};
   return {numero:e.numero||osNextLabel().label, dataISO:e.data||todayISO(),
     dataAberturaBR:e.data?new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR'):'',
-    oficina:'', matricula:(a.matricula||STATE.currentAC), sn:(a.sn||''),
-    nM:(a.nMotores!=null?a.nMotores:2), nH:(a.nHelices!=null?a.nHelices:0),
-    aer:{tsn:'',tso:'',csn:'',cso:''}, mot:[], hel:[],
+    oficina:'', matricula:(a.matricula||STATE.currentAC), sn:(a.sn||''), nM:2, nH:2,
+    aer:{tsn:'',tso:'',csn:'',cso:''},
+    mot:[{pn:'',sn:'',tsn:'',tso:'',csn:'',cso:''},{pn:'',sn:'',tsn:'',tso:'',csn:'',cso:''}],
+    hel:[{pn:'',sn:'',tsn:'',tso:''},{pn:'',sn:'',tsn:'',tso:''}],
     servicos:(e.itens||[]).slice(), execNum:'', execData:''};
 }
 function osInp(f,v,extra){ return `<input data-field="${f}" value="${esc(v||'')}" ${extra||''}>`; }
@@ -270,31 +285,40 @@ function osRenderSvcList(arr){
 function osDocHTML(d){
   const logo=(window.JETFOR_SEED&&window.JETFOR_SEED.logo)||'';
   const logoHtml=logo?`<span class="fh-logobox"><img class="fh-logo" src="${logo}" alt="JetFor"></span>`:`<span class="fh-jf">✈ JETFOR</span>`;
-  let util=`<tr><th>AERONAVE</th><td colspan="2">—</td><td>TSN ${osInp('aer.tsn',d.aer.tsn)}</td><td>TSO ${osInp('aer.tso',d.aer.tso)}</td><td>CSN ${osInp('aer.csn',d.aer.csn)}</td><td>CSO ${osInp('aer.cso',d.aer.cso)}</td></tr>`;
-  d.mot.forEach((mo,i)=>{ util+=`<tr><th>Motor ${i+1}</th><td>P/N ${osInp('mot.'+i+'.pn',mo.pn)}</td><td>S/N ${osInp('mot.'+i+'.sn',mo.sn)}</td><td>TSN ${osInp('mot.'+i+'.tsn',mo.tsn)}</td><td>TSO ${osInp('mot.'+i+'.tso',mo.tso)}</td><td>CSN ${osInp('mot.'+i+'.csn',mo.csn)}</td><td>CSO ${osInp('mot.'+i+'.cso',mo.cso)}</td></tr>`; });
-  d.hel.forEach((he,i)=>{ util+=`<tr><th>Hélice ${i+1}</th><td>P/N ${osInp('hel.'+i+'.pn',he.pn)}</td><td>S/N ${osInp('hel.'+i+'.sn',he.sn)}</td><td>TSN ${osInp('hel.'+i+'.tsn',he.tsn)}</td><td>TSO ${osInp('hel.'+i+'.tso',he.tso)}</td><td colspan="2">—</td></tr>`; });
+  let util=`<tr><th>AERONAVE</th><td colspan="2">TSN: ${osInp('aer.tsn',d.aer.tsn)}</td><td>TSO: ${osInp('aer.tso',d.aer.tso)}</td><td colspan="2">CSN: ${osInp('aer.csn',d.aer.csn)}</td><td>CSO: ${osInp('aer.cso',d.aer.cso)}</td></tr>`;
+  d.mot.forEach((mo,i)=>{ util+=`<tr><th>Motor ${i+1}</th><td>P/N: ${osInp('mot.'+i+'.pn',mo.pn)}</td><td>S/N: ${osInp('mot.'+i+'.sn',mo.sn)}</td><td>TSN: ${osInp('mot.'+i+'.tsn',mo.tsn)}</td><td>TSO: ${osInp('mot.'+i+'.tso',mo.tso)}</td><td>CSN: ${osInp('mot.'+i+'.csn',mo.csn)}</td><td>CSO: ${osInp('mot.'+i+'.cso',mo.cso)}</td></tr>`; });
+  d.hel.forEach((he,i)=>{ util+=`<tr><th>Hélice ${i+1}</th><td>P/N: ${osInp('hel.'+i+'.pn',he.pn)}</td><td>S/N: ${osInp('hel.'+i+'.sn',he.sn)}</td><td colspan="2">TSN: ${osInp('hel.'+i+'.tsn',he.tsn)}</td><td colspan="2">TSO: ${osInp('hel.'+i+'.tso',he.tso)}</td></tr>`; });
   return `
     <div class="osdoc">
-      <div class="fh"><div class="fh-l">${logoHtml}<span class="fh-emp">JETFOR TÁXI AÉREO LTDA. · COA 2007-07-2CHQ-02-02</span></div>
-        <div class="fh-r"><b>ORDEM DE SERVIÇO</b></div></div>
-      <table class="ff"><tr><th>Matrícula</th><td>${esc(d.matricula)}</td><th>Nº de Série</th><td>${esc(d.sn)}</td>
-        <th>O.S. Nº</th><td>${osInp('numero',d.numero,'style="width:90px"')}</td><th>Data de Abertura</th><td>${osInp('dataAbertura',d.dataAberturaBR,'style="width:100px"')}</td></tr>
-        <tr><th>Oficina executora (RBAC 145)</th><td colspan="7">${osInp('oficina',d.oficina,'placeholder="Ex.: USA - Uirapuru Serviços Aeronáuticos Ltda"')}</td></tr></table>
-      <div class="fsec">Registro de Utilização</div>
+      <table class="ff oshead">
+        <tr><td class="oslogo" rowspan="3">${logoHtml}</td><td class="ostitle" colspan="4">ORDEM DE SERVIÇO</td></tr>
+        <tr><th>Matrícula</th><th>Número de Série</th><th>O.S. Nº</th><td>${osInp('numero',d.numero)}</td></tr>
+        <tr><td>${esc(d.matricula)}</td><td>${esc(d.sn)}</td><th>Data de Abertura</th><td>${osInp('dataAbertura',d.dataAberturaBR)}</td></tr>
+      </table>
+      <div class="fsec">OFICINA EXECUTORA</div>
+      <table class="ff"><tr><td>${osInp('oficina',d.oficina,'placeholder="Ex.: USA - Uirapuru Serviços Aeronáuticos Ltda"')}</td></tr></table>
+      <div class="fsec">REGISTRO DE UTILIZAÇÃO</div>
       <table class="ff util">${util}</table>
-      <div class="fsec">Solicitação — Serviços a executar</div>
+      <div class="fsec">SOLICITAÇÃO</div>
+      <div class="fsec sub">SERVIÇOS A EXECUTAR</div>
       <div class="ossvcs" id="osSvcList"></div>
       <button type="button" class="btn o sm no-print" id="osSvcAdd" style="margin:6px 0 2px">+ adicionar item</button>
-      <table class="ff"><tr><th>Nome do Diretor de Manutenção</th><td>Leonardo Filipe de Araujo</td><th>CANAC/CREA/CFT</th><td>CREA 1713750589</td><th>Assinatura</th><td class="ossig"></td></tr></table>
-      <div class="fsec">Execução</div>
+      <table class="ff"><tr><th>Nome Diretor de Manutenção</th><td>Leonardo Filipe de Araujo</td><th>CANAC/CREA/CFT</th><td>CREA 1713750589</td><th>Assinatura</th><td class="ossig"></td></tr></table>
+      <div class="fsec">EXECUÇÃO</div>
       <table class="ff"><tr><th>Número da O.S.</th><td>${osInp('execNum',d.execNum)}</td><th>Data de Encerramento</th><td>${osInp('execData',d.execData,'placeholder="__/__/____"')}</td></tr></table>
-      <div class="osdecl"><b>DECLARAÇÃO DE LIBERAÇÃO PARA RETORNO AO SERVIÇO</b><br>
-        Declaro que os serviços acima foram executados de acordo com as instruções técnicas e a legislação vigente. Os itens em ACR (se houver), foram transferidos para nova Ordem de Serviço, como descrita na ação executada do item específico. O(s) Produto(s) aeronáutico(s) afetado(s) por esta Ordem de Serviço está(ão) aeronavegáveis e autorizado(s) para retorno ao Serviço.</div>
+      <div class="fsec">DECLARAÇÃO DE LIBERAÇÃO PARA RETORNO AO SERVIÇO</div>
+      <div class="osdecl">Declaro que os serviços acima foram executados de acordo com as instruções técnicas e a legislação vigente. Os itens em ACR (se houver), foram transferidos para nova Ordem de Serviço, como descrita na ação executada do item específico. O(s) Produto(s) aeronáutico(s) afetado(s) por esta Ordem de Serviço está(ão) aeronavegáveis e autorizado(s) para retorno ao Serviço.</div>
       <table class="ff"><tr><th>Responsável</th><td>Leonardo Filipe de Araujo · CREA 1713750589</td><th>Assinatura</th><td class="ossig"></td></tr></table>
     </div>`;
 }
+function osSetPageOrient(on){
+  let ps=document.getElementById('osPageStyle');
+  if(!ps){ ps=document.createElement('style'); ps.id='osPageStyle'; document.head.appendChild(ps); }
+  ps.textContent = on ? '@media print{@page{size:A4 portrait;margin:9mm}}' : '';
+}
 function osRender(d,mode,idx){
   OSCUR=d; OSCTX={mode:mode,idx:(idx==null?-1:idx)};
+  osSetPageOrient(true);
   $('#osBody').innerHTML=osDocHTML(d);
   osRenderSvcList(d.servicos||[]);
   const add=$('#osSvcAdd'); if(add) add.addEventListener('click',()=>{ const a=osSvcValues(); a.push(''); osRenderSvcList(a); });
@@ -315,7 +339,7 @@ function osCollect(){
   for(let i=0;i<d.nH;i++) d.hel.push({pn:gv('hel.'+i+'.pn'),sn:gv('hel.'+i+'.sn'),tsn:gv('hel.'+i+'.tsn'),tso:gv('hel.'+i+'.tso')});
   return d;
 }
-function osClose(){ $('#osOverlay').classList.remove('show'); document.body.classList.remove('osopen'); OSCTX={mode:'novo',idx:-1}; }
+function osClose(){ $('#osOverlay').classList.remove('show'); document.body.classList.remove('osopen'); osSetPageOrient(false); OSCTX={mode:'novo',idx:-1}; }
 function gerarOS(){
   const ids=selectedIds(); if(!ids.length){ toast('Selecione itens'); return; }
   osRender(osBuildFromSelection(),'novo');
