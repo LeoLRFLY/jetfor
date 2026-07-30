@@ -281,8 +281,12 @@
   table.ff.util th{width:1%} table.ff.util td{padding:5px 8px;font-size:11.5px}
   table.ff.util td input{border-bottom:1px solid var(--line)}
   .ossvcs{border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-bottom:4px}
-  .ossvc{font-size:11.5px;padding:4px 0;border-bottom:1px dashed #e6ebf2;line-height:1.4}
+  .ossvc{font-size:11.5px;padding:4px 0;border-bottom:1px dashed #e6ebf2;line-height:1.4;display:flex;align-items:center;gap:6px}
   .ossvc:last-child{border-bottom:none}
+  .ossvc input.svcinp{flex:1;border:none;border-bottom:1px solid var(--line);font-size:11.5px;padding:3px 4px;background:transparent}
+  .ossvc input.svcinp:focus{outline:2px solid var(--gold);outline-offset:-2px}
+  .ossvc .svcdel{padding:1px 8px;line-height:1.5}
+  @media print{ .svcdel,#osSvcAdd{display:none!important} .ossvc input.svcinp{border-bottom:none} }
   .osdecl{margin-top:12px;font-size:10.5px;line-height:1.45;color:#33404f;border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:#fafbfd}
   table.ff td.ossig{height:44px;min-width:160px;vertical-align:bottom}
   @media print{
@@ -483,10 +487,10 @@
 <!-- ORDEM DE SERVIÇO -->
 <div class="overlay" id="osOverlay">
   <div class="modal" style="width:820px;max-width:100%">
-    <h3>Ordem de Serviço (rascunho)</h3>
+    <h3 id="osTitle">Ordem de Serviço (nova)</h3>
     <div class="mbody" style="display:block" id="osBody"></div>
-    <div class="mfoot"><span class="muted" style="font-size:11px">Confira a numeração e a oficina. Ao registrar, a O.S. entra no histórico da aeronave e a numeração avança.</span>
-      <div><button class="btn o" id="osClose">Fechar</button><button class="btn p" onclick="window.print()">🖨 Imprimir / PDF</button><button class="btn g" id="osReg">✔ Registrar no histórico</button></div></div>
+    <div class="mfoot"><span class="muted" style="font-size:11px">Preencha os campos, imprima/gere PDF e registre no histórico. O.S. já registradas podem ser reabertas, editadas ou excluídas.</span>
+      <div><button class="btn o" id="osClose">Fechar</button><button class="btn o" id="osDel" style="display:none">🗑 Excluir</button><button class="btn p" onclick="window.print()">🖨 Imprimir / PDF</button><button class="btn g" id="osReg">✔ Registrar no histórico</button></div></div>
   </div>
 </div>
 <div id="toast"></div>

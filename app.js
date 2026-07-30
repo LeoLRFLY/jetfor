@@ -227,65 +227,142 @@ function osNextLabel(){
   const map=STATE.osProx||{}; const n=map[y]!=null?map[y]:(y==='2026'?10:1);
   return {y,n,label:String(n).padStart(3,'0')+'/'+y};
 }
-function gerarOS(){
-  const ids=selectedIds(); if(!ids.length){ toast('Selecione itens'); return; }
+// ---------- O.S.: modelo de dados + formulário padrão (novo/editar) ----------
+let OSCUR=null, OSCTX={mode:'novo',idx:-1};
+function osBuildFromSelection(){
   const m=cur(); const a=m.aeronave||{}; const C=m.contadores||{};
-  const items=ids.map(id=>m.tarefas.find(t=>t.id===id)).filter(Boolean);
-  const os=osNextLabel();
-  const hoje=new Date((STATE.hoje||todayISO())+'T00:00:00').toLocaleDateString('pt-BR');
+  const ids=selectedIds(); const items=ids.map(id=>m.tarefas.find(t=>t.id===id)).filter(Boolean);
   const g=v=>v!=null?fmtN(v,1):'';
   const nM=a.nMotores!=null?a.nMotores:2, nH=a.nHelices!=null?a.nHelices:0;
-  let util=`<tr><th>AERONAVE</th><td colspan="2">TSN: ${g(C.celula_horas)}</td><td colspan="2">TSO: —</td><td>CSN: ${g(C.celula_ciclos)}</td><td>CSO: —</td></tr>`;
-  for(let i=1;i<=nM;i++) util+=`<tr><th>Motor ${i}</th><td>P/N <input></td><td>S/N <input></td><td>TSN: ${g(C['motor'+i+'_horas'])}</td><td>TSO <input style="width:70px"></td><td>CSN: ${g(C['motor'+i+'_ciclos'])}</td><td>CSO <input style="width:70px"></td></tr>`;
-  for(let i=1;i<=nH;i++) util+=`<tr><th>Hélice ${i}</th><td>P/N <input></td><td>S/N <input></td><td>TSN: ${g(C['helice'+i+'_horas'])}</td><td>TSO <input style="width:70px"></td><td colspan="2">—</td></tr>`;
-  const servicos=items.map((t,i)=>`<div class="ossvc"><b>${i+1})</b> ${esc(t.nome)}${t.pn?' — P/N '+esc(t.pn):''}${t.sn?' · S/N '+esc(t.sn):''}</div>`).join('');
+  const iso=STATE.hoje||todayISO();
+  const d={
+    numero:osNextLabel().label,
+    dataISO:iso,
+    dataAberturaBR:new Date(iso+'T00:00:00').toLocaleDateString('pt-BR'),
+    oficina:'', matricula:(a.matricula||STATE.currentAC), sn:(a.sn||''), nM:nM, nH:nH,
+    aer:{tsn:g(C.celula_horas),tso:'',csn:g(C.celula_ciclos),cso:''},
+    mot:[], hel:[],
+    servicos:items.map(t=>esc0(t.nome)+(t.pn?' — P/N '+t.pn:'')+(t.sn?' · S/N '+t.sn:'')),
+    execNum:'', execData:''
+  };
+  for(let i=1;i<=nM;i++) d.mot.push({pn:'',sn:'',tsn:g(C['motor'+i+'_horas']),tso:'',csn:g(C['motor'+i+'_ciclos']),cso:''});
+  for(let i=1;i<=nH;i++) d.hel.push({pn:'',sn:'',tsn:g(C['helice'+i+'_horas']),tso:''});
+  return d;
+}
+function esc0(s){ return s==null?'':String(s); }
+function osLegacyData(e){
+  const m=cur(); const a=m.aeronave||{};
+  return {numero:e.numero||osNextLabel().label, dataISO:e.data||todayISO(),
+    dataAberturaBR:e.data?new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR'):'',
+    oficina:'', matricula:(a.matricula||STATE.currentAC), sn:(a.sn||''),
+    nM:(a.nMotores!=null?a.nMotores:2), nH:(a.nHelices!=null?a.nHelices:0),
+    aer:{tsn:'',tso:'',csn:'',cso:''}, mot:[], hel:[],
+    servicos:(e.itens||[]).slice(), execNum:'', execData:''};
+}
+function osInp(f,v,extra){ return `<input data-field="${f}" value="${esc(v||'')}" ${extra||''}>`; }
+function osSvcLine(s,i){ return `<div class="ossvc"><b>${i+1})</b> <input class="svcinp" value="${esc(s||'')}"><button type="button" class="btn o sm no-print svcdel" data-i="${i}" title="remover">×</button></div>`; }
+function osSvcValues(){ return Array.from($('#osBody').querySelectorAll('.svcinp')).map(e=>e.value); }
+function osRenderSvcList(arr){
+  const box=$('#osSvcList'); if(!box) return;
+  box.innerHTML=arr.map((s,i)=>osSvcLine(s,i)).join('');
+  box.querySelectorAll('.svcdel').forEach(b=>b.addEventListener('click',()=>{ const a=osSvcValues(); a.splice(+b.dataset.i,1); osRenderSvcList(a); }));
+}
+function osDocHTML(d){
   const logo=(window.JETFOR_SEED&&window.JETFOR_SEED.logo)||'';
   const logoHtml=logo?`<span class="fh-logobox"><img class="fh-logo" src="${logo}" alt="JetFor"></span>`:`<span class="fh-jf">✈ JETFOR</span>`;
-  $('#osBody').innerHTML=`
+  let util=`<tr><th>AERONAVE</th><td colspan="2">—</td><td>TSN ${osInp('aer.tsn',d.aer.tsn)}</td><td>TSO ${osInp('aer.tso',d.aer.tso)}</td><td>CSN ${osInp('aer.csn',d.aer.csn)}</td><td>CSO ${osInp('aer.cso',d.aer.cso)}</td></tr>`;
+  d.mot.forEach((mo,i)=>{ util+=`<tr><th>Motor ${i+1}</th><td>P/N ${osInp('mot.'+i+'.pn',mo.pn)}</td><td>S/N ${osInp('mot.'+i+'.sn',mo.sn)}</td><td>TSN ${osInp('mot.'+i+'.tsn',mo.tsn)}</td><td>TSO ${osInp('mot.'+i+'.tso',mo.tso)}</td><td>CSN ${osInp('mot.'+i+'.csn',mo.csn)}</td><td>CSO ${osInp('mot.'+i+'.cso',mo.cso)}</td></tr>`; });
+  d.hel.forEach((he,i)=>{ util+=`<tr><th>Hélice ${i+1}</th><td>P/N ${osInp('hel.'+i+'.pn',he.pn)}</td><td>S/N ${osInp('hel.'+i+'.sn',he.sn)}</td><td>TSN ${osInp('hel.'+i+'.tsn',he.tsn)}</td><td>TSO ${osInp('hel.'+i+'.tso',he.tso)}</td><td colspan="2">—</td></tr>`; });
+  return `
     <div class="osdoc">
       <div class="fh"><div class="fh-l">${logoHtml}<span class="fh-emp">JETFOR TÁXI AÉREO LTDA. · COA 2007-07-2CHQ-02-02</span></div>
         <div class="fh-r"><b>ORDEM DE SERVIÇO</b></div></div>
-      <table class="ff"><tr><th>Matrícula</th><td>${esc(a.matricula||STATE.currentAC)}</td><th>Nº de Série</th><td>${esc(a.sn||'')}</td>
-        <th>O.S. Nº</th><td><input id="osNum" value="${os.label}" style="width:90px"></td><th>Data de Abertura</th><td>${hoje}</td></tr>
-        <tr><th>Oficina executora (RBAC 145)</th><td colspan="7"><input placeholder="Ex.: USA - Uirapuru Serviços Aeronáuticos Ltda"></td></tr></table>
+      <table class="ff"><tr><th>Matrícula</th><td>${esc(d.matricula)}</td><th>Nº de Série</th><td>${esc(d.sn)}</td>
+        <th>O.S. Nº</th><td>${osInp('numero',d.numero,'style="width:90px"')}</td><th>Data de Abertura</th><td>${osInp('dataAbertura',d.dataAberturaBR,'style="width:100px"')}</td></tr>
+        <tr><th>Oficina executora (RBAC 145)</th><td colspan="7">${osInp('oficina',d.oficina,'placeholder="Ex.: USA - Uirapuru Serviços Aeronáuticos Ltda"')}</td></tr></table>
       <div class="fsec">Registro de Utilização</div>
       <table class="ff util">${util}</table>
-      <div class="fsec">Solicitação — Serviços a executar (${items.length})</div>
-      <div class="ossvcs">${servicos}</div>
+      <div class="fsec">Solicitação — Serviços a executar</div>
+      <div class="ossvcs" id="osSvcList"></div>
+      <button type="button" class="btn o sm no-print" id="osSvcAdd" style="margin:6px 0 2px">+ adicionar item</button>
       <table class="ff"><tr><th>Nome do Diretor de Manutenção</th><td>Leonardo Filipe de Araujo</td><th>CANAC/CREA/CFT</th><td>CREA 1713750589</td><th>Assinatura</th><td class="ossig"></td></tr></table>
       <div class="fsec">Execução</div>
-      <table class="ff"><tr><th>Número da O.S.</th><td><input></td><th>Data de Encerramento</th><td><input placeholder="__/__/____"></td></tr></table>
+      <table class="ff"><tr><th>Número da O.S.</th><td>${osInp('execNum',d.execNum)}</td><th>Data de Encerramento</th><td>${osInp('execData',d.execData,'placeholder="__/__/____"')}</td></tr></table>
       <div class="osdecl"><b>DECLARAÇÃO DE LIBERAÇÃO PARA RETORNO AO SERVIÇO</b><br>
         Declaro que os serviços acima foram executados de acordo com as instruções técnicas e a legislação vigente. Os itens em ACR (se houver), foram transferidos para nova Ordem de Serviço, como descrita na ação executada do item específico. O(s) Produto(s) aeronáutico(s) afetado(s) por esta Ordem de Serviço está(ão) aeronavegáveis e autorizado(s) para retorno ao Serviço.</div>
       <table class="ff"><tr><th>Responsável</th><td>Leonardo Filipe de Araujo · CREA 1713750589</td><th>Assinatura</th><td class="ossig"></td></tr></table>
     </div>`;
+}
+function osRender(d,mode,idx){
+  OSCUR=d; OSCTX={mode:mode,idx:(idx==null?-1:idx)};
+  $('#osBody').innerHTML=osDocHTML(d);
+  osRenderSvcList(d.servicos||[]);
+  const add=$('#osSvcAdd'); if(add) add.addEventListener('click',()=>{ const a=osSvcValues(); a.push(''); osRenderSvcList(a); });
+  const reg=$('#osReg'); if(reg) reg.textContent = mode==='edit' ? '✔ Salvar alterações' : '✔ Registrar no histórico';
+  const del=$('#osDel'); if(del) del.style.display = mode==='edit' ? '' : 'none';
+  const ttl=$('#osTitle'); if(ttl) ttl.textContent = mode==='edit' ? ('Ordem de Serviço '+d.numero+' — editar') : 'Ordem de Serviço (nova)';
   $('#osOverlay').classList.add('show'); document.body.classList.add('osopen');
 }
+function osCollect(){
+  const root=$('#osBody'); const gv=f=>{const el=root.querySelector('[data-field="'+f+'"]');return el?el.value.trim():'';};
+  const b=OSCUR||{};
+  const d={ numero:gv('numero')||b.numero, dataAberturaBR:gv('dataAbertura'), dataISO:b.dataISO,
+    oficina:gv('oficina'), matricula:b.matricula, sn:b.sn, nM:b.nM||0, nH:b.nH||0,
+    aer:{tsn:gv('aer.tsn'),tso:gv('aer.tso'),csn:gv('aer.csn'),cso:gv('aer.cso')},
+    mot:[], hel:[], servicos:osSvcValues().map(s=>s.trim()).filter(Boolean),
+    execNum:gv('execNum'), execData:gv('execData') };
+  for(let i=0;i<d.nM;i++) d.mot.push({pn:gv('mot.'+i+'.pn'),sn:gv('mot.'+i+'.sn'),tsn:gv('mot.'+i+'.tsn'),tso:gv('mot.'+i+'.tso'),csn:gv('mot.'+i+'.csn'),cso:gv('mot.'+i+'.cso')});
+  for(let i=0;i<d.nH;i++) d.hel.push({pn:gv('hel.'+i+'.pn'),sn:gv('hel.'+i+'.sn'),tsn:gv('hel.'+i+'.tsn'),tso:gv('hel.'+i+'.tso')});
+  return d;
+}
+function osClose(){ $('#osOverlay').classList.remove('show'); document.body.classList.remove('osopen'); OSCTX={mode:'novo',idx:-1}; }
+function gerarOS(){
+  const ids=selectedIds(); if(!ids.length){ toast('Selecione itens'); return; }
+  osRender(osBuildFromSelection(),'novo');
+}
+function abrirOS(idx){
+  const m=cur(); const e=(m.osHistorico||[])[idx]; if(!e) return;
+  osRender(e.doc?clone(e.doc):osLegacyData(e),'edit',idx);
+}
+function osRegDispatch(){ if(OSCTX.mode==='edit') salvarOSedit(OSCTX.idx); else registrarOS(); }
 function registrarOS(){
-  const m=cur(); const os=osNextLabel();
-  const numEl=$('#osNum'); const numero=numEl?numEl.value.trim():os.label;
-  const ids=selectedIds(); const items=ids.map(id=>m.tarefas.find(t=>t.id===id)).filter(Boolean);
-  if(!m.osHistorico) m.osHistorico=[];
-  m.osHistorico.push({numero, data:(STATE.hoje||todayISO()), itens:items.map(t=>t.nome), qtd:items.length});
-  // incrementa sequência do ano
-  const y=(STATE.hoje||todayISO()).slice(0,4);
+  const d=osCollect(); const m=cur(); if(!m.osHistorico) m.osHistorico=[];
+  m.osHistorico.push({numero:d.numero, data:d.dataISO||STATE.hoje||todayISO(), itens:d.servicos.slice(), qtd:d.servicos.length, doc:d});
+  const y=(d.dataISO||STATE.hoje||todayISO()).slice(0,4);
   STATE.osProx=STATE.osProx||{}; STATE.osProx[y]=(STATE.osProx[y]!=null?STATE.osProx[y]:(y==='2026'?10:1))+1;
-  saveAll(); toast('✔ O.S. '+numero+' registrada no histórico');
-  $('#osOverlay').classList.remove('show'); document.body.classList.remove('osopen');
+  saveAll(); toast('✔ O.S. '+d.numero+' registrada no histórico'); osClose();
+  if($('#mapa-sheet').style.display!=='none') renderHistoricoOS();
+}
+function salvarOSedit(idx){
+  const d=osCollect(); const m=cur(); const e=(m.osHistorico||[])[idx]; if(!e){ osClose(); return; }
+  e.numero=d.numero; e.itens=d.servicos.slice(); e.qtd=d.servicos.length; e.doc=d;
+  saveAll(); toast('✔ O.S. '+d.numero+' atualizada'); osClose();
+  if($('#mapa-sheet').style.display!=='none') renderHistoricoOS();
+}
+function excluirOS(idx){
+  const m=cur(); const e=(m.osHistorico||[])[idx]; if(!e) return;
+  if(!confirm('Excluir a O.S. '+e.numero+'? Esta ação não pode ser desfeita.\n(A numeração NÃO volta atrás — o número não será reutilizado.)')) return;
+  m.osHistorico.splice(idx,1);
+  saveAll(); toast('🗑 O.S. '+e.numero+' excluída');
+  if($('#osOverlay').classList.contains('show')) osClose();
+  if($('#mapa-sheet').style.display!=='none') renderHistoricoOS();
 }
 function renderHistoricoOS(){
   const h0=(cur().osHistorico)||[];
   let h=`<div class="panel"><h2><span class="tag">O.S.</span> Histórico de Ordens de Serviço — ${esc(STATE.currentAC)}</h2><div class="pbody">`;
   const prox=osNextLabel().label;
-  h+=`<p class="lead">Próxima O.S. a emitir: <b>${prox}</b>. Ao registrar uma O.S., a numeração avança sozinha.</p>`;
+  h+=`<p class="lead">Próxima O.S. a emitir: <b>${prox}</b>. Clique em uma O.S. para abrir, editar e reimprimir. A numeração avança ao registrar uma nova.</p>`;
   if(!h0.length){ h+='<p class="lead">Nenhuma O.S. registrada ainda para esta aeronave.</p>'; }
   else{
-    h+=`<div class="tblwrap"><table class="da"><thead><tr><th>O.S. Nº</th><th>Data</th><th class="num">Itens</th><th>Serviços</th></tr></thead><tbody>`;
-    h0.slice().reverse().forEach(o=>{ h+=`<tr><td><b>${esc(o.numero)}</b></td><td>${fmtDate(new Date((o.data||'')+'T00:00:00'))}</td><td class="num">${o.qtd||(o.itens?o.itens.length:0)}</td><td class="obscell">${esc((o.itens||[]).join(' · '))}</td></tr>`; });
+    h+=`<div class="tblwrap"><table class="da"><thead><tr><th>O.S. Nº</th><th>Data</th><th class="num">Itens</th><th>Serviços</th><th class="num">Ações</th></tr></thead><tbody>`;
+    h0.map((o,i)=>({o,i})).reverse().forEach(({o,i})=>{ h+=`<tr class="osrow" data-i="${i}" style="cursor:pointer"><td><b>${esc(o.numero)}</b></td><td>${fmtDate(new Date((o.data||'')+'T00:00:00'))}</td><td class="num">${o.qtd||(o.itens?o.itens.length:0)}</td><td class="obscell">${esc((o.itens||[]).join(' · '))}</td><td class="num" style="white-space:nowrap"><button class="btn o sm" data-open="${i}">Abrir</button> <button class="btn o sm" data-del="${i}" title="excluir">🗑</button></td></tr>`; });
     h+=`</tbody></table></div>`;
   }
   h+=`</div></div>`;
   $('#mapa-sheet').innerHTML=h;
+  $('#mapa-sheet').querySelectorAll('[data-open]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); abrirOS(+b.dataset.open); }));
+  $('#mapa-sheet').querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); excluirOS(+b.dataset.del); }));
+  $('#mapa-sheet').querySelectorAll('.osrow').forEach(r=>r.addEventListener('click',()=>abrirOS(+r.dataset.i)));
 }
 function baseTagClass(base){
   if(base&&base.startsWith('motor1')) return 'm1';
@@ -760,9 +837,10 @@ function boot(){
   $('#btnExport').addEventListener('click',exportJSON);
   $('#chkAll').addEventListener('change',e=>{ document.querySelectorAll('#tbl .rowchk').forEach(cb=>cb.checked=e.target.checked); updateOSsel(); });
   $('#btnOS').addEventListener('click',gerarOS);
-  $('#osClose').addEventListener('click',()=>{ $('#osOverlay').classList.remove('show'); document.body.classList.remove('osopen'); });
-  $('#osReg').addEventListener('click',registrarOS);
-  $('#osOverlay').addEventListener('click',e=>{ if(e.target.id==='osOverlay'){ $('#osOverlay').classList.remove('show'); document.body.classList.remove('osopen'); } });
+  $('#osClose').addEventListener('click',osClose);
+  $('#osReg').addEventListener('click',osRegDispatch);
+  $('#osDel').addEventListener('click',()=>{ if(OSCTX.mode==='edit') excluirOS(OSCTX.idx); });
+  $('#osOverlay').addEventListener('click',e=>{ if(e.target.id==='osOverlay') osClose(); });
   $('#btnImport').addEventListener('click',()=>$('#fileImport').click());
   $('#fileImport').addEventListener('change',e=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=''; });
   $('#overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
