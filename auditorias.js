@@ -43,9 +43,9 @@ function renderOficinas(){
       h += `<div class="ofcard">
         <div class="ofcard-top"><div class="ofrz">${esc(o.razao||'(sem nome)')}</div>
           <div class="no-print"><button class="acbtn" data-ofedit="${i}" title="Editar">✎</button><button class="acbtn del" data-ofdel="${i}" title="Remover">🗑</button></div></div>
-        <div class="row"><b>CHE/Cert.:</b> ${esc(o.che||'—')} ${o.localidade?'· '+esc(o.localidade):''}</div>
-        <div class="row"><b>Serviços:</b> ${esc(o.servicos||o.escopo||'—')}</div>
+        <div class="row"><b>CNPJ:</b> ${esc(o.cnpj||'—')} · <b>CHE:</b> ${esc(o.che||'—')}</div>
         <div class="row"><b>Modelos:</b> ${esc(o.modelos||'—')}</div>
+        <div class="row"><b>Contato:</b> ${esc(o.contato||'—')}</div>
         <div class="row"><b>Última auditoria:</b> ${o.ultimaAuditoria?fmtDate(new Date(o.ultimaAuditoria+'T00:00:00')):'—'} ${prox?`· <b>próxima:</b> <span class="${vencida?'disp-neg':''}">${fmtDate(new Date(prox+'T00:00:00'))}</span>`:''}</div>
         <div class="row"><b>Envio do MGM:</b> ${o.dataEnvioMGM?fmtDate(new Date(o.dataEnvioMGM+'T00:00:00')):'—'}</div>
         ${o.status?`<span class="badge ${stCls}">${esc(o.status)}</span>`:'<span class="badge n">Sem auditoria</span>'}
@@ -69,20 +69,16 @@ function openOficinaModal(idx){
   $('#ofBody').innerHTML = `
     <table class="ff"><tr><th>Razão social</th><td colspan="3"><input data-of="razao" value="${f('razao')}"></td></tr>
       <tr><th>CNPJ</th><td><input data-of="cnpj" value="${f('cnpj')}"></td><th>Certificação / CHE nº</th><td><input data-of="che" value="${f('che')}"></td></tr>
-      <tr><th>Localidade</th><td><input data-of="localidade" value="${f('localidade')}"></td><th>Endereço</th><td><input data-of="endereco" value="${f('endereco')}"></td></tr>
       <tr><th>Modelos atendidos</th><td><input data-of="modelos" value="${f('modelos')}"></td><th>Contato</th><td><input data-of="contato" value="${f('contato')}"></td></tr>
-      <tr><th>Escopo / habilitações</th><td colspan="3"><input data-of="escopo" value="${f('escopo')}"></td></tr>
-      <tr><th>Serviços prestados</th><td colspan="3"><input data-of="servicos" value="${f('servicos')}"></td></tr>
-      <tr><th>Validade da certificação</th><td><input data-of="validadeCert" value="${f('validadeCert')}" placeholder="aaaa-mm-dd"></td><th>Data de envio do MGM</th><td><input data-of="dataEnvioMGM" value="${f('dataEnvioMGM')}" placeholder="aaaa-mm-dd"></td></tr>
+      <tr><th>Data de envio do MGM</th><td colspan="3"><input data-of="dataEnvioMGM" value="${f('dataEnvioMGM')}" placeholder="aaaa-mm-dd"></td></tr>
     </table>`;
   $('#ofTitle').textContent = idx!=null ? 'Editar oficina' : 'Nova oficina';
   $('#ofOverlay').classList.add('show');
 }
 function saveOficina(){
   const root = $('#ofBody'); const g = k=>{ const e=root.querySelector('[data-of="'+k+'"]'); return e?e.value.trim():''; };
-  const rec = { razao:g('razao'),cnpj:g('cnpj'),che:g('che'),localidade:g('localidade'),endereco:g('endereco'),
-    modelos:g('modelos'),contato:g('contato'),escopo:g('escopo'),servicos:g('servicos'),
-    validadeCert:g('validadeCert'),dataEnvioMGM:g('dataEnvioMGM') };
+  const rec = { razao:g('razao'),cnpj:g('cnpj'),che:g('che'),modelos:g('modelos'),
+    contato:g('contato'),dataEnvioMGM:g('dataEnvioMGM') };
   if(!rec.razao){ toast('Informe a razão social'); return; }
   if(AUDCTX.of!=null && oficinas()[AUDCTX.of]){ oficinas()[AUDCTX.of]=Object.assign({},oficinas()[AUDCTX.of],rec); }
   else { rec.id=ofNovaId(); rec.auditorias=[]; oficinas().push(rec); }
