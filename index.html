@@ -346,6 +346,14 @@
   .docrow.muted{border-style:dashed;color:#9aa2ad;background:#fafbfc;font-style:italic}
   .docrow .docmove{font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;max-width:150px}
   .doccat h3 .catdel{padding:0 7px;margin-left:6px}
+  /* ---- dar baixa em massa ---- */
+  .bxgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:6px}
+  .bxgroup{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .bxgroup .ctitle{font-weight:700;font-size:12px;color:var(--navy);display:flex;align-items:center;gap:6px;margin-bottom:6px}
+  .bxgroup .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .bxfields{display:flex;flex-wrap:wrap;gap:8px}
+  .bxfield{font-size:11px;color:#556;display:flex;flex-direction:column;gap:2px}
+  .bxfield input{border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-size:12px;width:90px}
   /* ---- oficinas & auditorias ---- */
   .ofgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
   .ofcard{background:#fff;border:1px solid var(--line);border-left:5px solid var(--navy2);border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
@@ -440,6 +448,7 @@
       </select>
       <button class="btn p sm" id="btnAdd">+ Nova tarefa</button>
       <button class="btn g sm no-print" id="btnOS" style="display:none">🧾 Gerar O.S. (<span id="osCount">0</span>)</button>
+      <button class="btn p sm no-print" id="btnBaixa" style="display:none">✔ Dar baixa (<span id="baixaCount">0</span>)</button>
       <div class="kpis" id="kpis"></div>
     </div>
     <div class="tblwrap">
@@ -545,6 +554,15 @@
     <div class="mbody" style="display:block" id="osBody"></div>
     <div class="mfoot"><span class="muted" style="font-size:11px">Preencha os campos, imprima/gere PDF e registre no histórico. O.S. já registradas podem ser reabertas, editadas ou excluídas.</span>
       <div><button class="btn o" id="osClose">Fechar</button><button class="btn o" id="osDel" style="display:none">🗑 Excluir</button><button class="btn p" onclick="window.print()">🖨 Imprimir / PDF</button><button class="btn g" id="osReg">✔ Registrar no histórico</button></div></div>
+  </div>
+</div>
+<!-- DAR BAIXA EM MASSA -->
+<div class="overlay" id="baixaOverlay">
+  <div class="modal" style="width:760px;max-width:100%">
+    <h3>Dar baixa nas tarefas selecionadas</h3>
+    <div class="mbody" style="display:block" id="baixaBody"></div>
+    <div class="mfoot"><span class="muted" style="font-size:11px">Registra a execução: atualiza a última execução de cada tarefa e recalcula VENC/DISP.</span>
+      <div><button class="btn o" id="baixaCancel">Cancelar</button><button class="btn g" id="baixaOk">✔ Aplicar baixa</button></div></div>
   </div>
 </div>
 <!-- OFICINA (cadastro) -->

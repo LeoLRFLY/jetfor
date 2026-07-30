@@ -239,9 +239,51 @@ function renderTable(){
 function selectedIds(){ return [...document.querySelectorAll('#tbl .rowchk:checked')].map(c=>c.dataset.id); }
 function updateOSsel(){
   const n=selectedIds().length;
-  const b=$('#btnOS'); if(!b) return;
-  $('#osCount').textContent=n;
-  b.style.display = n>0 ? '' : 'none';
+  const b=$('#btnOS');
+  if(b){ $('#osCount').textContent=n; b.style.display = n>0 ? '' : 'none'; }
+  const bx=$('#btnBaixa');
+  if(bx){ $('#baixaCount').textContent=n; bx.style.display = n>0 ? '' : 'none'; }
+}
+// ---------- DAR BAIXA EM MASSA ----------
+function openBaixa(){
+  const ids=selectedIds(); if(!ids.length){ toast('Selecione tarefas'); return; }
+  const groups=buildCounterGroups();
+  const hoje=STATE.hoje||todayISO();
+  let rd='';
+  groups.forEach(g=>{
+    rd+=`<div class="bxgroup"><div class="ctitle"><span class="dot" style="background:${g.dot}"></span>${g.title}</div><div class="bxfields">`;
+    g.fields.forEach(([k,lab])=>{ const v=STATE.contadores[k]!=null?STATE.contadores[k]:''; rd+=`<label class="bxfield">${lab}<input type="number" step="any" data-bx="${k}" value="${v}"></label>`; });
+    rd+='</div></div>';
+  });
+  $('#baixaBody').innerHTML=`
+    <p class="lead"><b>${ids.length}</b> tarefa(s) selecionada(s). Informe a data e as leituras dos contadores no momento da execução — cada tarefa recebe a leitura correspondente à sua base e o VENC/DISP é recalculado.</p>
+    <table class="ff"><tr><th>Data da execução</th><td><input id="bxData" value="${hoje}" placeholder="aaaa-mm-dd" style="width:130px"></td>
+      <th>Oficina executante</th><td><input id="bxRef" placeholder="Ex.: USA - Uirapuru (vai p/ Observações)"></td></tr></table>
+    <div class="fsec">Leituras dos contadores na execução</div>
+    <div class="bxgrid">${rd}</div>`;
+  $('#baixaOverlay').classList.add('show');
+}
+function closeBaixa(){ $('#baixaOverlay').classList.remove('show'); }
+function aplicarBaixa(){
+  const ids=selectedIds(); if(!ids.length){ closeBaixa(); return; }
+  const root=$('#baixaBody');
+  const dEl=root.querySelector('#bxData'); const data=(dEl?dEl.value.trim():'')||todayISO();
+  const ref=(root.querySelector('#bxRef')||{}).value||'';
+  const readings={}; root.querySelectorAll('[data-bx]').forEach(i=>{ readings[i.dataset.bx]=num(i.value); });
+  const m=cur(); let n=0, skip=0;
+  ids.forEach(id=>{
+    const t=m.tarefas.find(x=>x.id===id); if(!t) return;
+    let upd=false;
+    if(t.base && t.base!=='calendario' && t.intervalo!=null && readings[t.base]!=null){ t.exec=readings[t.base]; upd=true; }
+    if(t.cal){ t.cal.exec=data; upd=true; }
+    if(ref){ t.obs=ref; }   // oficina executante vai para o campo Observações
+    if(upd) n++; else skip++;
+  });
+  saveAll(); renderTable();
+  toast('✔ Baixa aplicada em '+n+' tarefa(s)'+(skip?' ('+skip+' sem intervalo/calendário — não alteradas)':''));
+  closeBaixa();
+  document.querySelectorAll('#tbl .rowchk:checked').forEach(c=>c.checked=false);
+  const ca=$('#chkAll'); if(ca) ca.checked=false; updateOSsel();
 }
 function osNextLabel(){
   const y=(STATE.hoje||todayISO()).slice(0,4);
@@ -889,6 +931,10 @@ function boot(){
   $('#btnExport').addEventListener('click',exportJSON);
   $('#chkAll').addEventListener('change',e=>{ document.querySelectorAll('#tbl .rowchk').forEach(cb=>cb.checked=e.target.checked); updateOSsel(); });
   $('#btnOS').addEventListener('click',gerarOS);
+  $('#btnBaixa').addEventListener('click',openBaixa);
+  $('#baixaOk').addEventListener('click',aplicarBaixa);
+  $('#baixaCancel').addEventListener('click',closeBaixa);
+  $('#baixaOverlay').addEventListener('click',e=>{ if(e.target.id==='baixaOverlay') closeBaixa(); });
   $('#osClose').addEventListener('click',osClose);
   $('#osReg').addEventListener('click',osRegDispatch);
   $('#osDel').addEventListener('click',()=>{ if(OSCTX.mode==='edit') excluirOS(OSCTX.idx); });
