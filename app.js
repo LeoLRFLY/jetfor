@@ -863,20 +863,113 @@ function renderInicio(){
 }
 
 // ---------- Sub-abas do MAPA: DA & Boletins (por aeronave) ----------
+// ---------- DAs editáveis + calculadora (repetitivas) ----------
+const DA_KEYS=['numero','sinopse','bs','cat','freq','data','tsn','tso','rprimario','disp','exec','venc','obs','cadpag','cumprido'];
+let DACTX={sheet:null,idx:-1}; let DAFADT={remove:false};
+async function uploadFADT(file, ac, sheet){
+  if(typeof STORAGE==='undefined' || !STORAGE){ toast('⚠ Ative o Firebase Storage p/ anexar FADT'); return null; }
+  const safe=file.name.replace(/[^\w.\- ]+/g,'_');
+  const path='das/'+ac+'/'+sheet+'/'+Date.now()+'_'+safe;
+  try{ toast('Anexando '+file.name+'…'); const ref=STORAGE.ref().child(path); const snap=await ref.put(file); const url=await snap.ref.getDownloadURL(); return {url,path,nome:file.name}; }
+  catch(e){ console.error(e); toast('⚠ Falha ao anexar: '+(e.code||e.message)); return null; }
+}
+function daRowNormalize(r){
+  if(!r || r.sec!==undefined) return r;
+  if(r.c){ const o={}; DA_KEYS.forEach((k,i)=>o[k]=r.c[i]!=null?r.c[i]:''); return o; }
+  return r;
+}
+function daSheetCat(k){ return {celula:'celula',m1:'motor1',m2:'motor2',h1:'helice1',h2:'helice2'}[k]||'celula'; }
+function daBaseOptions(k){
+  const cat=daSheetCat(k);
+  if(cat==='celula') return [['celula_horas','FH · Horas'],['celula_ciclos','FC · Ciclos'],['celula_pousos','Pousos'],['calendario','Somente calendário']];
+  if(cat.indexOf('motor')===0) return [[cat+'_tsn','FH · TSN'],[cat+'_tso','FH · TSO'],[cat+'_csn','FC · CSN'],[cat+'_cso','FC · CSO'],['calendario','Somente calendário']];
+  return [[cat+'_tsn','FH · TSN'],[cat+'_tso','FH · TSO'],['calendario','Somente calendário']];
+}
 function renderMapaSheet(k){
   const DA=cur().da; if(!DA||!DA.sheets[k]) return;
   const sh=DA.sheets[k];
-  let h=`<div class="panel"><h2><span class="tag">${esc(sh.title.split('—')[0].trim())}</span> ${esc(sh.title)} — ${esc(STATE.currentAC)}</h2><div class="pbody">`;
-  if(sh.stale) h+=`<div class="stale">⚠ Esta aba veio do Excel com dados de <b>outra aeronave</b> (template). Substituir pelos boletins reais do S550 quando disponíveis.</div>`;
-  if(sh.info&&sh.info.length) h+=`<p class="lead" style="margin-bottom:8px">${sh.info.map(esc).join(' · ')}</p>`;
-  h+=`<div class="tblwrap"><table class="da"><thead><tr>${DA.cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>`;
-  sh.rows.forEach(r=>{
-    if(r.sec!==undefined){ h+=`<tr class="dasec"><td colspan="${DA.cols.length}">${esc(r.sec)}</td></tr>`; return; }
-    h+=`<tr>${r.c.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`;
+  sh.rows=(sh.rows||[]).map(daRowNormalize);
+  let h=`<div class="panel"><h2><span class="tag">${esc((sh.title||'DA').split('—')[0].trim())}</span> ${esc(sh.title||'DA')} — ${esc(STATE.currentAC)}</h2><div class="pbody">`;
+  if(sh.stale) h+=`<div class="stale">⚠ Esta aba veio do Excel como template (dados de outra aeronave). Edite/limpe conforme as DAs reais.</div>`;
+  h+=`<button class="btn g sm no-print" id="daNew" style="margin-bottom:10px">➕ Nova DA</button>`;
+  h+=`<div class="tblwrap"><table class="da"><thead><tr><th>#</th><th>Nº / DA</th><th>Sinopse</th><th>BS / Método</th><th>Cat</th><th>Tipo</th><th class="num">Freq.</th><th class="num">Vence</th><th class="num">Restante</th><th>Cumprido</th><th>Obs</th><th class="no-print">Ações</th></tr></thead><tbody>`;
+  let nr=0;
+  sh.rows.forEach((r,idx)=>{
+    if(r.sec!==undefined){ h+=`<tr class="dasec"><td colspan="12">${esc(r.sec)} <button class="btn o sm no-print dasecdel" data-i="${idx}" title="remover seção">🗑</button></td></tr>`; return; }
+    nr++;
+    const tipo=r.tipo||(r.base?'repetitiva':'unica');
+    let freq='—',venc='—',disp='—';
+    if(tipo==='repetitiva'){
+      const c=compute(r);
+      if(c.num){ const u=c.num.unit; if(r.intervalo!=null) freq=fmtN(r.intervalo,0)+' '+u; if(c.num.venc!=null) venc=fmtN(c.num.venc,1)+' '+u; if(c.num.disp!=null) disp=`<span class="${c.num.disp<0?'disp-neg':''}">${fmtN(c.num.disp,1)} ${u}</span>`; }
+      if(c.cal){ const dd=c.cal.disp; const cs=`${fmtDate(c.cal.venc)} <span class="${dd!=null&&dd<0?'disp-neg':''}">(${dd!=null?dd+'d':'—'})</span>`; venc=(venc==='—')?cs:(venc+' · '+cs); if(freq==='—'&&r.cal) freq=r.cal.meses+'m'; }
+    } else { freq=r.freq||'única'; venc=r.venc||'—'; disp=r.disp||'—'; }
+    h+=`<tr class="darow" data-i="${idx}" style="cursor:pointer"><td class="nrcol">${nr}</td><td><b>${esc(r.numero||'—')}</b></td><td>${esc(r.sinopse||'')}</td><td>${esc(r.bs||'')}</td><td>${esc(r.cat||'')}</td><td>${tipo==='repetitiva'?'🔁 Repet.':'Única'}</td><td class="num">${freq}</td><td class="num">${venc}</td><td class="num">${disp}</td><td>${esc(r.cumprido||'')}${r.fadt?` <a href="${esc(r.fadt.url)}" target="_blank" rel="noopener" title="FADT anexada" onclick="event.stopPropagation()">📎</a>`:''}</td><td class="obscell">${esc(r.obs||'')}</td><td class="no-print"><button class="btn o sm" data-daedit="${idx}">✎</button> <button class="btn o sm" data-dadel="${idx}">🗑</button></td></tr>`;
   });
   h+=`</tbody></table></div></div></div>`;
   $('#mapa-sheet').innerHTML=h;
+  $('#daNew').addEventListener('click',()=>openDA(k,null));
+  $('#mapa-sheet').querySelectorAll('[data-daedit]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openDA(k,+b.dataset.daedit);}));
+  $('#mapa-sheet').querySelectorAll('[data-dadel]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();deleteDA(k,+b.dataset.dadel);}));
+  $('#mapa-sheet').querySelectorAll('.darow').forEach(r=>r.addEventListener('click',()=>openDA(k,+r.dataset.i)));
+  $('#mapa-sheet').querySelectorAll('.dasecdel').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation(); if(confirm('Remover esta seção?')){ sh.rows.splice(+b.dataset.i,1); saveAll(); renderMapaSheet(k);} }));
 }
+function openDA(k,idx){
+  DACTX={sheet:k,idx:(idx==null?-1:idx)};
+  const sh=cur().da.sheets[k]; sh.rows=(sh.rows||[]).map(daRowNormalize);
+  const r = idx!=null ? sh.rows[idx] : {tipo:'unica'};
+  const tipo=r.tipo||(r.base?'repetitiva':'unica');
+  const baseOpts=daBaseOptions(k);
+  const v=x=>esc(r[x]||'');
+  const isoOr=(x)=> (r[x]&&/^\d{4}-\d{2}-\d{2}/.test(r[x]))?r[x]:'';
+  $('#daBody').innerHTML=`
+    <div class="fld"><label>Nº da DA/AD</label><input id="da_num" value="${v('numero')}"></div>
+    <div class="fld"><label>Categoria</label><input id="da_cat" value="${v('cat')}" placeholder="Ex.: T / Célula"></div>
+    <div class="fld full"><label>Sinopse / assunto</label><input id="da_sin" value="${v('sinopse')}"></div>
+    <div class="fld full"><label>BS / método de cumprimento</label><input id="da_bs" value="${v('bs')}"></div>
+    <div class="fld full"><label>Tipo</label>
+      <select id="da_tipo"><option value="unica" ${tipo==='unica'?'selected':''}>Única (uma vez)</option><option value="repetitiva" ${tipo==='repetitiva'?'selected':''}>🔁 Repetitiva (recorrente)</option></select></div>
+    <div class="fld"><label>Base (contador)</label><select id="da_base">${baseOpts.map(([b,l])=>`<option value="${b}" ${r.base===b?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="fld"><label>Intervalo (freq.)</label><input id="da_int" type="number" step="any" value="${r.intervalo!=null?r.intervalo:''}"></div>
+    <div class="fld"><label>Última execução (leitura)</label><input id="da_exec" type="number" step="any" value="${r.exec!=null?r.exec:''}"></div>
+    <div class="fld"><label>Co-limite — Meses</label><input id="da_calm" type="number" step="1" value="${r.cal&&r.cal.meses!=null?r.cal.meses:''}"></div>
+    <div class="fld"><label>Data últ. exec (calendário)</label><input id="da_cale" type="date" value="${r.cal&&r.cal.exec?r.cal.exec:''}"></div>
+    <div class="fld"><label>Data de cumprimento</label><input id="da_data" type="date" value="${isoOr('data')}"></div>
+    <div class="fld"><label>Cumprido</label><input id="da_cumpr" value="${v('cumprido')}" placeholder="Sim / Não / N/A"></div>
+    <div class="fld"><label>R. Primário / ref.</label><input id="da_rprim" value="${v('rprimario')}"></div>
+    <div class="fld"><label>Cad/Pág (FCDA)</label><input id="da_cad" value="${v('cadpag')}"></div>
+    <div class="fld full"><label>FADT / anexo (comprovante)</label>
+      <div id="da_fadtCur">${r.fadt?`📎 <a href="${esc(r.fadt.url)}" target="_blank" rel="noopener">${esc(r.fadt.nome)}</a> <button type="button" class="btn o sm" id="da_fadtDel">remover</button>`:'<span class="muted">nenhum anexo</span>'}</div>
+      <input type="file" id="da_fadt" class="no-print" style="margin-top:5px"></div>
+    <div class="fld full"><label>Observações</label><textarea id="da_obs">${esc(r.obs||'')}</textarea></div>`;
+  DAFADT={remove:false};
+  $('#daTitle').textContent = idx!=null ? ('DA '+(r.numero||'')) : 'Nova DA';
+  const fdel=$('#da_fadtDel'); if(fdel) fdel.addEventListener('click',()=>{ DAFADT.remove=true; $('#da_fadtCur').innerHTML='<span class="muted">anexo será removido ao salvar</span>'; });
+  const toggleRep=()=>{ const rep=$('#da_tipo').value==='repetitiva';
+    ['da_base','da_int','da_exec','da_calm','da_cale'].forEach(id=>{ const fld=$('#'+id).closest('.fld'); if(fld) fld.style.display=rep?'':'none'; }); };
+  $('#da_tipo').addEventListener('change',toggleRep); toggleRep();
+  $('#daOverlay').classList.add('show');
+}
+async function saveDA(){
+  const k=DACTX.sheet; const sh=cur().da.sheets[k]; if(!sh){ closeDA(); return; }
+  const g=id=>{const e=$('#'+id);return e?e.value.trim():'';};
+  const tipo=$('#da_tipo').value;
+  const row={ numero:g('da_num'), cat:g('da_cat'), sinopse:g('da_sin'), bs:g('da_bs'), tipo,
+    data:g('da_data'), cumprido:g('da_cumpr'), rprimario:g('da_rprim'), cadpag:g('da_cad'), obs:g('da_obs') };
+  if(tipo==='repetitiva'){
+    row.base=$('#da_base').value; row.intervalo=num(g('da_int')); row.exec=num(g('da_exec'));
+    const cm=num(g('da_calm')), ce=g('da_cale'); if(cm!=null&&ce) row.cal={meses:cm,exec:ce};
+  }
+  if(!row.numero && !row.sinopse){ toast('Informe o nº ou a sinopse da DA'); return; }
+  const fileEl=$('#da_fadt'); const f=fileEl&&fileEl.files[0];
+  if(f){ const up=await uploadFADT(f, STATE.currentAC, k); if(up) row.fadt=up; }
+  else if(DAFADT.remove){ row.fadt=null; }
+  if(DACTX.idx>=0) sh.rows[DACTX.idx]=Object.assign({},sh.rows[DACTX.idx],row);
+  else sh.rows.push(row);
+  saveAll(); closeDA(); renderMapaSheet(k); toast('✔ DA salva');
+}
+function closeDA(){ $('#daOverlay').classList.remove('show'); DACTX.idx=-1; }
+function deleteDA(k,idx){ const sh=cur().da.sheets[k]; if(!sh) return; if(!confirm('Excluir esta DA?')) return; sh.rows.splice(idx,1); saveAll(); renderMapaSheet(k); toast('🗑 DA excluída'); }
 function renderICA(){
   const ica=(STATE.tarefas||[]).filter(t=>t.categoria==='ica');
   let h=`<div class="panel"><h2><span class="tag">ICA</span> ICA / Grandes Modificações — ${esc(STATE.currentAC)}</h2><div class="pbody">`;
@@ -1076,6 +1169,9 @@ function boot(){
   $('#f_cat').addEventListener('change',onCatChange);
   $('#f_grupoNew').addEventListener('click',e=>{ e.preventDefault(); novoGrupo(); });
   $('#f_troca').addEventListener('click',registrarTroca);
+  $('#daOk').addEventListener('click',saveDA);
+  $('#daCancel').addEventListener('click',closeDA);
+  $('#daOverlay').addEventListener('click',e=>{ if(e.target.id==='daOverlay') closeDA(); });
   $('#osClose').addEventListener('click',osClose);
   $('#osReg').addEventListener('click',osRegDispatch);
   $('#osDel').addEventListener('click',()=>{ if(OSCTX.mode==='edit') excluirOS(OSCTX.idx); });

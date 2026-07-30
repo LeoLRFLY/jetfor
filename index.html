@@ -562,6 +562,15 @@
       <div><button class="btn o" id="osClose">Fechar</button><button class="btn o" id="osDel" style="display:none">🗑 Excluir</button><button class="btn p" onclick="window.print()">🖨 Imprimir / PDF</button><button class="btn g" id="osReg">✔ Registrar no histórico</button></div></div>
   </div>
 </div>
+<!-- DA (criar/editar) -->
+<div class="overlay" id="daOverlay">
+  <div class="modal" style="width:660px;max-width:100%">
+    <h3 id="daTitle">Nova DA</h3>
+    <div class="mbody" id="daBody"></div>
+    <div class="mfoot"><span class="muted" style="font-size:11px">Diretriz de Aeronavegabilidade. Repetitiva calcula o próximo vencimento sozinha.</span>
+      <div><button class="btn o" id="daCancel">Cancelar</button><button class="btn g" id="daOk">Salvar DA</button></div></div>
+  </div>
+</div>
 <!-- HISTÓRICO DE CUMPRIMENTOS (por tarefa) -->
 <div class="overlay" id="histOverlay">
   <div class="modal" style="width:680px;max-width:100%">
