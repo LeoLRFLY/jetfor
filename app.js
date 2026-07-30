@@ -239,9 +239,11 @@ function gerarOS(){
   for(let i=1;i<=nM;i++) util+=`<tr><th>Motor ${i}</th><td>P/N <input></td><td>S/N <input></td><td>TSN: ${g(C['motor'+i+'_horas'])}</td><td>TSO <input style="width:70px"></td><td>CSN: ${g(C['motor'+i+'_ciclos'])}</td><td>CSO <input style="width:70px"></td></tr>`;
   for(let i=1;i<=nH;i++) util+=`<tr><th>Hélice ${i}</th><td>P/N <input></td><td>S/N <input></td><td>TSN: ${g(C['helice'+i+'_horas'])}</td><td>TSO <input style="width:70px"></td><td colspan="2">—</td></tr>`;
   const servicos=items.map((t,i)=>`<div class="ossvc"><b>${i+1})</b> ${esc(t.nome)}${t.pn?' — P/N '+esc(t.pn):''}${t.sn?' · S/N '+esc(t.sn):''}</div>`).join('');
+  const logo=(window.JETFOR_SEED&&window.JETFOR_SEED.logo)||'';
+  const logoHtml=logo?`<span class="fh-logobox"><img class="fh-logo" src="${logo}" alt="JetFor"></span>`:`<span class="fh-jf">✈ JETFOR</span>`;
   $('#osBody').innerHTML=`
     <div class="osdoc">
-      <div class="fh"><div class="fh-l"><span class="fh-jf">✈ JETFOR</span><span class="fh-emp">JETFOR TÁXI AÉREO LTDA. · COA 2007-07-2CHQ-02-02</span></div>
+      <div class="fh"><div class="fh-l">${logoHtml}<span class="fh-emp">JETFOR TÁXI AÉREO LTDA. · COA 2007-07-2CHQ-02-02</span></div>
         <div class="fh-r"><b>ORDEM DE SERVIÇO</b></div></div>
       <table class="ff"><tr><th>Matrícula</th><td>${esc(a.matricula||STATE.currentAC)}</td><th>Nº de Série</th><td>${esc(a.sn||'')}</td>
         <th>O.S. Nº</th><td><input id="osNum" value="${os.label}" style="width:90px"></td><th>Data de Abertura</th><td>${hoje}</td></tr>
@@ -250,12 +252,12 @@ function gerarOS(){
       <table class="ff util">${util}</table>
       <div class="fsec">Solicitação — Serviços a executar (${items.length})</div>
       <div class="ossvcs">${servicos}</div>
-      <table class="ff"><tr><th>Diretor de Manutenção</th><td>Leonardo Filipe de Araujo</td><th>CANAC/CREA</th><td>CREA 1713750589</td><th>Assinatura</th><td></td></tr></table>
+      <table class="ff"><tr><th>Nome do Diretor de Manutenção</th><td>Leonardo Filipe de Araujo</td><th>CANAC/CREA/CFT</th><td>CREA 1713750589</td><th>Assinatura</th><td class="ossig"></td></tr></table>
       <div class="fsec">Execução</div>
-      <table class="ff"><tr><th>Nº da O.S.</th><td><input></td><th>Data de Encerramento</th><td><input placeholder="__/__/____"></td></tr></table>
+      <table class="ff"><tr><th>Número da O.S.</th><td><input></td><th>Data de Encerramento</th><td><input placeholder="__/__/____"></td></tr></table>
       <div class="osdecl"><b>DECLARAÇÃO DE LIBERAÇÃO PARA RETORNO AO SERVIÇO</b><br>
-        Declaro que os serviços acima foram executados de acordo com as instruções técnicas e a legislação vigente. Os itens em ACR (se houver) foram transferidos para nova Ordem de Serviço. O(s) produto(s) aeronáutico(s) afetado(s) por esta Ordem de Serviço está(ão) aeronavegável(is) e autorizado(s) para retorno ao serviço.</div>
-      <div class="fsign"><div class="fsign-line">_______________________________________</div>Responsável: Leonardo Filipe de Araujo · CREA 1713750589</div>
+        Declaro que os serviços acima foram executados de acordo com as instruções técnicas e a legislação vigente. Os itens em ACR (se houver), foram transferidos para nova Ordem de Serviço, como descrita na ação executada do item específico. O(s) Produto(s) aeronáutico(s) afetado(s) por esta Ordem de Serviço está(ão) aeronavegáveis e autorizado(s) para retorno ao Serviço.</div>
+      <table class="ff"><tr><th>Responsável</th><td>Leonardo Filipe de Araujo · CREA 1713750589</td><th>Assinatura</th><td class="ossig"></td></tr></table>
     </div>`;
   $('#osOverlay').classList.add('show'); document.body.classList.add('osopen');
 }

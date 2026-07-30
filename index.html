@@ -274,7 +274,9 @@
   .floc{margin-top:8px;font-size:11.5px;color:#33404f}
   .fobs{margin-top:12px;font-size:10.5px;color:#8a94a6;font-style:italic}
   .osdoc{font-size:12px} .osdoc .fh{border-bottom:2px solid var(--gold);padding-bottom:8px;margin-bottom:12px;display:flex;justify-content:space-between}
-  .osdoc .fh-jf{font-weight:800;color:var(--navy);font-size:15px;display:block} .osdoc .fh-emp{font-size:10px;color:var(--grey)}
+  .osdoc .fh-jf{font-weight:800;color:var(--navy);font-size:15px;display:block} .osdoc .fh-emp{font-size:10px;color:var(--grey);display:block}
+  .osdoc .fh-logobox{display:inline-block;background:var(--navy);padding:6px 12px;border-radius:6px;margin-bottom:4px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .osdoc .fh-logo{height:30px;width:auto;display:block}
   .osdoc .fh-r{text-align:right} .osdoc .fh-min{font-size:10px;color:#8a94a6}
   table.ff.util th{width:1%} table.ff.util td{padding:5px 8px;font-size:11.5px}
   table.ff.util td input{border-bottom:1px solid var(--line)}
@@ -282,7 +284,9 @@
   .ossvc{font-size:11.5px;padding:4px 0;border-bottom:1px dashed #e6ebf2;line-height:1.4}
   .ossvc:last-child{border-bottom:none}
   .osdecl{margin-top:12px;font-size:10.5px;line-height:1.45;color:#33404f;border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:#fafbfd}
+  table.ff td.ossig{height:44px;min-width:160px;vertical-align:bottom}
   @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
     body.osopen > *:not(#osOverlay){display:none!important}
     body.osopen #osOverlay{position:static;background:#fff;display:block}
     body.osopen #osOverlay .mfoot, body.osopen #osOverlay h3{display:none}
