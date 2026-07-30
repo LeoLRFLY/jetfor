@@ -152,7 +152,7 @@ function subscribeAC(ac){
     if(d.docs) m.docs=d.docs;
     if(d.docCatsExtra) m.docCatsExtra=d.docCatsExtra;
     if(d.grupos) m.grupos=d.grupos;
-    migrateEngineCounters(m);
+    migrateEngineCounters(m); reclassIca(m); applyTaskPatch(m,ac);
     if(ac===STATE.currentAC){ STATE.contadores=m.contadores; STATE.tarefas=m.tarefas; renderCounters(); renderTable(); }
   });
 }
@@ -188,6 +188,21 @@ function migrateEngineCounters(m){
   (m.tarefas||[]).forEach(t=>{ if(t && t.base) t.base=remapEngineBase(t.base,t); });
 }
 function migrateAllEngineCounters(){ Object.keys(STATE.acmaps||{}).forEach(k=>migrateEngineCounters(STATE.acmaps[k])); }
+function normName(s){ s=(s==null?'':String(s)).toUpperCase(); try{ s=s.normalize('NFD').replace(/[̀-ͯ]/g,''); }catch(e){} return s.replace(/\s+/g,' ').trim(); }
+// ICA vira grupo no mapa (categoria normal, preserva grupo com o nome da ICA)
+function reclassIca(m){
+  (m.tarefas||[]).forEach(t=>{ if(t && t.categoria==='ica'){
+    t.categoria = (t.base&&t.base.indexOf('motor')===0)?'motor':((t.base&&t.base.indexOf('helice')===0)?'helice':'celula');
+  }});
+}
+// adiciona itens faltantes do patch SEM tocar nos existentes (preserva baixas)
+function applyTaskPatch(m, ac){
+  if(!window.JETFOR_PATCH || !window.JETFOR_PATCH[ac]) return;
+  m.tarefas = m.tarefas || [];
+  const have = new Set(m.tarefas.map(t=>normName(t.nome)));
+  window.JETFOR_PATCH[ac].forEach(pt=>{ const kn=normName(pt.nome); if(!have.has(kn)){ m.tarefas.push(JSON.parse(JSON.stringify(pt))); have.add(kn); } });
+}
+function migrateMapsFull(){ Object.keys(STATE.acmaps||{}).forEach(ac=>{ const m=STATE.acmaps[ac]; migrateEngineCounters(m); reclassIca(m); applyTaskPatch(m,ac); }); }
 function buildCounterGroups(){
   const ac = (cur()&&cur().aeronave)||{};
   const nM = ac.nMotores!=null? ac.nMotores : 2;
@@ -1169,7 +1184,7 @@ function boot(){
     docCatsGeral: (local&&local.docCatsGeral) || [],
     oficinas: (local&&local.oficinas) || []
   };
-  migrateAllEngineCounters();
+  migrateMapsFull();
   STATE.contadores=STATE.acmaps[currentAC].contadores; STATE.tarefas=STATE.acmaps[currentAC].tarefas;
   const a=acmaps[currentAC].aeronave||{};
   const label=`${a.matricula||currentAC} · ${a.modelo||''}${a.sn?' · S/N '+a.sn:''}`;
