@@ -354,6 +354,13 @@
   .bxfields{display:flex;flex-wrap:wrap;gap:8px}
   .bxfield{font-size:11px;color:#556;display:flex;flex-direction:column;gap:2px}
   .bxfield input{border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-size:12px;width:90px}
+  /* ---- form tarefa: unidades + grupo header ---- */
+  #f_units.chkrow{display:flex;gap:14px;margin-top:6px;flex-wrap:wrap}
+  #f_units .chk{font-size:13px;color:#33404f;display:flex;align-items:center;gap:5px}
+  #f_units .chk input{width:auto}
+  tr.grp .grpname{font-weight:700}
+  tr.grp .grpedit,tr.grp .grpdel{padding:0 6px;font-size:11px;margin-left:4px;opacity:.55}
+  tr.grp:hover .grpedit,tr.grp:hover .grpdel{opacity:1}
   /* ---- oficinas & auditorias ---- */
   .ofgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
   .ofcard{background:#fff;border:1px solid var(--line);border-left:5px solid var(--navy2);border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
@@ -481,40 +488,32 @@
   <div class="modal">
     <h3 id="modalTitle">Editar tarefa</h3>
     <div class="mbody" id="mbody">
-      <div class="fld full"><label>Nomenclatura</label><input id="f_nome"></div>
-      <div class="fld"><label>Grupo</label><input id="f_grupo" list="grupos"></div>
-      <div class="fld"><label>Base de contagem</label>
-        <select id="f_base">
-          <option value="celula_horas">Célula — Horas</option>
-          <option value="celula_pousos">Célula — Pousos</option>
-          <option value="celula_ciclos">Célula — Ciclos</option>
-          <option value="motor1_tsn">Motor 1 — TSN (h)</option>
-          <option value="motor1_tso">Motor 1 — TSO (h)</option>
-          <option value="motor1_csn">Motor 1 — CSN</option>
-          <option value="motor1_cso">Motor 1 — CSO</option>
-          <option value="motor2_tsn">Motor 2 — TSN (h)</option>
-          <option value="motor2_tso">Motor 2 — TSO (h)</option>
-          <option value="motor2_csn">Motor 2 — CSN</option>
-          <option value="motor2_cso">Motor 2 — CSO</option>
-          <option value="helice1_tsn">Hélice 1 — TSN (h)</option>
-          <option value="helice1_tso">Hélice 1 — TSO (h)</option>
-          <option value="helice2_tsn">Hélice 2 — TSN (h)</option>
-          <option value="helice2_tso">Hélice 2 — TSO (h)</option>
-          <option value="calendario">Somente Calendário</option>
+      <div class="fld"><label>Grupo</label>
+        <select id="f_grupo"></select>
+        <span class="hint"><a href="#" id="f_grupoNew">➕ criar novo grupo</a></span></div>
+      <div class="fld full"><label>Nomenclatura da tarefa</label><input id="f_nome"></div>
+      <div class="fld full"><label>Aplicar em</label>
+        <select id="f_cat">
+          <option value="celula">Célula (aeronave)</option>
+          <option value="motor">Motor</option>
+          <option value="helice">Hélice</option>
         </select>
-      </div>
+        <div id="f_units" class="chkrow"></div>
+        <span class="hint" id="f_unitsHint">Motor/Hélice cria a tarefa nas duas unidades — desmarque uma se não se aplica.</span></div>
+      <div class="fld full" style="border-top:1px dashed var(--line);padding-top:10px"><label>Peça</label></div>
+      <div class="fld"><label>Nome da peça</label><input id="f_peca"></div>
+      <div class="fld"><label>Fabricante</label><input id="f_fab"></div>
       <div class="fld"><label>P/N</label><input id="f_pn"></div>
       <div class="fld"><label>S/N</label><input id="f_sn"></div>
-      <div class="fld"><label>Intervalo (na unidade da base)</label><input id="f_intervalo" type="number" step="any">
-        <span class="hint">Ex.: 150 horas, 4000 pousos, 14000 ciclos.</span></div>
-      <div class="fld"><label>Última execução (valor do contador)</label><input id="f_exec" type="number" step="any">
-        <span class="hint">Valor do contador quando foi feita. VENC = Exec + Intervalo.</span></div>
-      <div class="fld"><label>VENC fixo (opcional)</label><input id="f_vencfixo" type="number" step="any">
-        <span class="hint">Use só p/ limite fixo (ex.: LLP) sem intervalo.</span></div>
-      <div class="fld full" style="border-top:1px dashed var(--line);padding-top:10px">
-        <label>Co-limite calendário (opcional)</label></div>
-      <div class="fld"><label>Meses</label><input id="f_calmeses" type="number" step="1"></div>
-      <div class="fld"><label>Data última execução</label><input id="f_calexec" type="date"></div>
+      <div class="fld full"><button type="button" class="btn o sm" id="f_troca">🔧 Registrar troca de peça</button>
+        <span class="hint">Grava a troca no histórico e zera o intervalo a partir da nova leitura.</span></div>
+      <div class="fld full" style="border-top:1px dashed var(--line);padding-top:10px"><label>Intervalo (calculadora)</label></div>
+      <div class="fld"><label>Valor</label><input id="f_intervalo" type="number" step="any"></div>
+      <div class="fld"><label>Unidade</label><select id="f_unit"></select></div>
+      <div class="fld"><label>Última execução (leitura)</label><input id="f_exec" type="number" step="any"></div>
+      <div class="fld"><label>VENC fixo (LLP, opcional)</label><input id="f_vencfixo" type="number" step="any"></div>
+      <div class="fld"><label>Co-limite — Meses (opcional)</label><input id="f_calmeses" type="number" step="1"></div>
+      <div class="fld"><label>Data da última execução (calendário)</label><input id="f_calexec" type="date"></div>
       <div class="fld full"><label>Observações</label><textarea id="f_obs"></textarea></div>
     </div>
     <div class="mfoot">

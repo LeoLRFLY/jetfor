@@ -88,7 +88,7 @@ async function saveAll(){
     try{
       SUPPRESS=true;
       const m=cur();
-      await acDoc(STATE.currentAC).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),docs:(m.docs||[]),docCatsExtra:(m.docCatsExtra||[]),updatedAt:new Date().toISOString()});
+      await acDoc(STATE.currentAC).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),docs:(m.docs||[]),docCatsExtra:(m.docCatsExtra||[]),grupos:(m.grupos||[]),updatedAt:new Date().toISOString()});
       await acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),docCatsGeral:(STATE.docCatsGeral||[]),updatedAt:new Date().toISOString()});
       await acDoc('_oficinas').set({oficinas:(STATE.oficinas||[]),updatedAt:new Date().toISOString()});
       SUPPRESS=false;
@@ -151,6 +151,7 @@ function subscribeAC(ac){
     if(d.osHistorico) m.osHistorico=d.osHistorico;
     if(d.docs) m.docs=d.docs;
     if(d.docCatsExtra) m.docCatsExtra=d.docCatsExtra;
+    if(d.grupos) m.grupos=d.grupos;
     migrateEngineCounters(m);
     if(ac===STATE.currentAC){ STATE.contadores=m.contadores; STATE.tarefas=m.tarefas; renderCounters(); renderTable(); }
   });
@@ -247,12 +248,14 @@ function renderTable(){
     if(!visible.length) return;
     // linha de grupo
     const gr=document.createElement('tr'); gr.className='grp';
-    gr.innerHTML=`<td colspan="14">${gname}</td>`; tb.appendChild(gr);
+    gr.innerHTML=`<td colspan="14"><span class="grpname">${esc(gname)}</span> <button class="btn o sm no-print grpedit" data-g="${esc(gname)}" title="renomear grupo">✎</button> <button class="btn o sm no-print grpdel" data-g="${esc(gname)}" title="remover grupo">🗑</button></td>`; tb.appendChild(gr);
     visible.forEach(([t,c])=>{ nr++; tb.appendChild(rowEl(t,c,nr)); });
   });
   // seleção / O.S.
   const chkAll=$('#chkAll'); if(chkAll) chkAll.checked=false;
   tb.querySelectorAll('.rowchk').forEach(cb=>cb.addEventListener('change',updateOSsel));
+  tb.querySelectorAll('.grpedit').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); renomearGrupo(b.dataset.g); }));
+  tb.querySelectorAll('.grpdel').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); removerGrupo(b.dataset.g); }));
   updateOSsel();
 
   // KPIs
@@ -534,47 +537,125 @@ function openTaskHist(id){
 }
 function closeHist(){ $('#histOverlay').classList.remove('show'); }
 
-// ---------- FILTRO grupos ----------
+// ---------- grupos (seletor + gestão) ----------
+function customGrupos(){ const m=cur(); m.grupos=m.grupos||[]; return m.grupos; }
+function allGrupos(){ return [...new Set([...new Set(STATE.tarefas.map(t=>t.grupo).filter(Boolean))].concat(customGrupos()))]; }
 function fillGroupFilters(){
-  const gs=[...new Set(STATE.tarefas.map(t=>t.grupo))];
-  const sel=$('#fgrupo'); const cur=sel.value;
-  sel.innerHTML='<option value="">Todos os grupos</option>'+gs.map(g=>`<option>${esc(g)}</option>`).join('');
-  sel.value=cur;
-  $('#grupos').innerHTML=gs.map(g=>`<option value="${esc(g)}">`).join('');
+  const all=allGrupos();
+  const fsel=$('#fgrupo'); if(fsel){ const cv=fsel.value; fsel.innerHTML='<option value="">Todos os grupos</option>'+all.map(g=>`<option>${esc(g)}</option>`).join(''); fsel.value=cv; }
+  const gsel=$('#f_grupo'); if(gsel){ const cv=gsel.value; gsel.innerHTML=all.map(g=>`<option>${esc(g)}</option>`).join(''); if(all.indexOf(cv)>=0) gsel.value=cv; }
+}
+function novoGrupo(){
+  let g=prompt('Nome do novo grupo (ex.: 53 - FUSELAGE, GRANDES MODIFICAÇÕES):'); if(g==null) return; g=g.trim(); if(!g) return;
+  if(allGrupos().indexOf(g)<0) customGrupos().push(g);
+  fillGroupFilters(); $('#f_grupo').value=g; saveAll();
+}
+function renomearGrupo(old){
+  let g=prompt('Renomear grupo:', old); if(g==null) return; g=g.trim(); if(!g||g===old) return;
+  STATE.tarefas.forEach(t=>{ if(t.grupo===old) t.grupo=g; });
+  const cg=customGrupos(); const i=cg.indexOf(old); if(i>=0) cg[i]=g; else if(cg.indexOf(g)<0 && !STATE.tarefas.some(t=>t.grupo===g)){}
+  fillGroupFilters(); renderTable(); saveAll(); toast('✔ Grupo renomeado');
+}
+function removerGrupo(g){
+  const temTarefas=STATE.tarefas.some(t=>t.grupo===g);
+  if(temTarefas){ if(!confirm('O grupo "'+g+'" tem tarefas. Remover o grupo e mover essas tarefas para "Diversos"?')) return;
+    STATE.tarefas.forEach(t=>{ if(t.grupo===g) t.grupo='Diversos'; }); }
+  const cg=customGrupos(); const i=cg.indexOf(g); if(i>=0) cg.splice(i,1);
+  fillGroupFilters(); renderTable(); saveAll(); toast('🗑 Grupo removido');
 }
 
 // ---------- MODAL (edição/criação) ----------
 let editingId=null;
+function catUnitOptions(cat){
+  if(cat==='motor') return [['tsn','FH · TSN (horas)'],['tso','FH · TSO (horas)'],['csn','FC · CSN (ciclos)'],['cso','FC · CSO (ciclos)'],['','— só calendário']];
+  if(cat==='helice') return [['tsn','FH · TSN (horas)'],['tso','FH · TSO (horas)'],['','— só calendário']];
+  return [['horas','FH · Horas'],['ciclos','FC · Ciclos'],['pousos','Pousos'],['','— só calendário']];
+}
+function deriveBase(cat,unit,idx){ if(!unit) return 'calendario'; if(cat==='celula') return 'celula_'+unit; return cat+idx+'_'+unit; }
+function parseBaseToCatUnit(base){
+  let m;
+  if(!base||base==='calendario') return {cat:'celula',unit:'',idx:1};
+  if((m=/^celula_(horas|ciclos|pousos)$/.exec(base))) return {cat:'celula',unit:m[1],idx:1};
+  if((m=/^motor(\d+)_(tsn|tso|csn|cso)$/.exec(base))) return {cat:'motor',unit:m[2],idx:+m[1]};
+  if((m=/^helice(\d+)_(tsn|tso)$/.exec(base))) return {cat:'helice',unit:m[2],idx:+m[1]};
+  if((m=/^motor(\d+)_horas$/.exec(base))) return {cat:'motor',unit:'tsn',idx:+m[1]};
+  if((m=/^motor(\d+)_ciclos$/.exec(base))) return {cat:'motor',unit:'csn',idx:+m[1]};
+  if((m=/^helice(\d+)_horas$/.exec(base))) return {cat:'helice',unit:'tsn',idx:+m[1]};
+  return {cat:'celula',unit:'horas',idx:1};
+}
+function fillUnitSelect(cat,unit){ $('#f_unit').innerHTML=catUnitOptions(cat).map(([v,l])=>`<option value="${v}" ${v===unit?'selected':''}>${l}</option>`).join(''); }
+function nUnits(cat){ const a=cur().aeronave||{}; return cat==='motor'?(a.nMotores!=null?a.nMotores:2):(cat==='helice'?(a.nHelices!=null?a.nHelices:0):0); }
+function renderModalUnits(cat,checked){
+  const box=$('#f_units'), hint=$('#f_unitsHint'); const n=nUnits(cat);
+  if(cat==='celula'||n<=0){ box.innerHTML=''; box.style.display='none'; if(hint) hint.style.display='none'; return; }
+  box.style.display=''; if(hint) hint.style.display='';
+  const lbl=cat==='motor'?'Motor':'Hélice'; let h='';
+  for(let i=1;i<=n;i++) h+=`<label class="chk"><input type="checkbox" class="unitchk" value="${i}" ${checked.indexOf(i)>=0?'checked':''}> ${lbl} ${i}</label>`;
+  box.innerHTML=h;
+}
+function onCatChange(){
+  const cat=$('#f_cat').value; const n=nUnits(cat);
+  renderModalUnits(cat, n>0?Array.from({length:n},(_,i)=>i+1):[]);
+  const opts=catUnitOptions(cat).map(o=>o[0]); const cu=$('#f_unit').value;
+  fillUnitSelect(cat, opts.indexOf(cu)>=0?cu:opts[0]);
+}
 function openModal(id){
   editingId=id;
-  const t = id? STATE.tarefas.find(x=>x.id===id) : {base:'celula_horas'};
+  const t = id? STATE.tarefas.find(x=>x.id===id) : {base:'celula_horas',categoria:'celula'};
   $('#modalTitle').textContent = id? 'Editar tarefa' : 'Nova tarefa';
-  $('#f_nome').value=t.nome||''; $('#f_grupo').value=t.grupo||'';
-  $('#f_base').value=t.base||'celula_horas';
+  fillGroupFilters();
+  const a=cur().aeronave||{}; const hasH=(a.nHelices!=null?a.nHelices:0)>0;
+  const catSel=$('#f_cat'); const hOpt=catSel.querySelector('option[value="helice"]'); if(hOpt) hOpt.style.display=hasH?'':'none';
+  if(t.grupo){ if(allGrupos().indexOf(t.grupo)<0) customGrupos().push(t.grupo); fillGroupFilters(); $('#f_grupo').value=t.grupo; }
+  $('#f_nome').value=t.nome||'';
+  const pu=parseBaseToCatUnit(t.base||'celula_horas');
+  catSel.value=(pu.cat==='helice'&&!hasH)?'celula':pu.cat;
+  if(id) renderModalUnits(catSel.value,[pu.idx]); else onCatChange();
+  fillUnitSelect(catSel.value,pu.unit);
+  $('#f_peca').value=t.peca||''; $('#f_fab').value=t.fabricante||'';
   $('#f_pn').value=t.pn||''; $('#f_sn').value=t.sn||'';
   $('#f_intervalo').value=t.intervalo!=null?t.intervalo:''; $('#f_exec').value=t.exec!=null?t.exec:'';
   $('#f_vencfixo').value=t.vencFixo!=null?t.vencFixo:'';
   $('#f_calmeses').value=t.cal&&t.cal.meses!=null?t.cal.meses:''; $('#f_calexec').value=t.cal&&t.cal.exec?t.cal.exec:'';
   $('#f_obs').value=t.obs||'';
-  $('#btnDelete').style.display = id?'inline-block':'none';
+  $('#btnDelete').style.display=id?'inline-block':'none';
+  $('#f_troca').style.display=id?'':'none';
   $('#overlay').classList.add('show');
 }
 function closeModal(){ $('#overlay').classList.remove('show'); editingId=null; }
 function saveModal(){
-  const rec={
-    nome:$('#f_nome').value.trim(), grupo:($('#f_grupo').value.trim()||'Diversos'),
-    base:$('#f_base').value, pn:$('#f_pn').value.trim(), sn:$('#f_sn').value.trim(),
-    intervalo:num($('#f_intervalo').value), exec:num($('#f_exec').value), vencFixo:num($('#f_vencfixo').value),
-    obs:$('#f_obs').value.trim(), motor:null
-  };
-  if(rec.base.startsWith('motor1')) rec.motor='motor1';
-  else if(rec.base.startsWith('motor2')) rec.motor='motor2';
+  const nome=$('#f_nome').value.trim(); if(!nome){ toast('Informe a nomenclatura'); return; }
+  const cat=$('#f_cat').value, unit=$('#f_unit').value;
   const cm=num($('#f_calmeses').value), ce=$('#f_calexec').value;
-  if(cm!=null && ce) rec.cal={meses:cm,exec:ce};
-  if(!rec.nome){ toast('Informe a nomenclatura'); return; }
-  if(editingId){ const i=STATE.tarefas.findIndex(x=>x.id===editingId); STATE.tarefas[i]=Object.assign({id:editingId},rec); }
-  else { rec.id='t'+Date.now(); STATE.tarefas.push(rec); }
+  const common={ nome, grupo:($('#f_grupo').value.trim()||'Diversos'), categoria:cat, unidade:null,
+    peca:$('#f_peca').value.trim(), fabricante:$('#f_fab').value.trim(),
+    pn:$('#f_pn').value.trim(), sn:$('#f_sn').value.trim(),
+    intervalo:num($('#f_intervalo').value), exec:num($('#f_exec').value), vencFixo:num($('#f_vencfixo').value),
+    obs:$('#f_obs').value.trim() };
+  if(cm!=null&&ce) common.cal={meses:cm,exec:ce};
+  let idxs=[1];
+  if(cat==='motor'||cat==='helice'){ idxs=[...document.querySelectorAll('#f_units .unitchk:checked')].map(c=>+c.value); if(!idxs.length){ toast('Selecione ao menos uma unidade (Motor/Hélice)'); return; } }
+  if(editingId){
+    const i=STATE.tarefas.findIndex(x=>x.id===editingId); const old=STATE.tarefas[i]||{};
+    const rec=Object.assign({},old,common,{base:deriveBase(cat,unit,cat==='celula'?1:idxs[0])});
+    if(!common.cal) delete rec.cal;
+    STATE.tarefas[i]=rec;
+  } else {
+    idxs.forEach((idx,k)=>{ STATE.tarefas.push(Object.assign({},common,{id:'t'+Date.now().toString(36)+k+Math.floor(Math.random()*1e3).toString(36),base:deriveBase(cat,unit,idx)})); });
+  }
   closeModal(); fillGroupFilters(); renderTable(); saveAll();
+}
+function registrarTroca(){
+  if(!editingId){ toast('Salve a tarefa antes de registrar a troca'); return; }
+  const t=STATE.tarefas.find(x=>x.id===editingId); if(!t) return;
+  const leituraStr=prompt('Leitura do contador na troca (horas/ciclos). Deixe vazio se não se aplica:',''); if(leituraStr===null) return;
+  const leitura=num(leituraStr);
+  t.peca=$('#f_peca').value.trim(); t.fabricante=$('#f_fab').value.trim(); t.pn=$('#f_pn').value.trim(); t.sn=$('#f_sn').value.trim();
+  const data=STATE.hoje||todayISO();
+  if(leitura!=null && t.base && t.base!=='calendario' && t.intervalo!=null){ t.exec=leitura; $('#f_exec').value=leitura; }
+  if(t.cal) t.cal.exec=data;
+  t.hist=t.hist||[]; t.hist.push({data, oficina:'🔧 Troca de peça'+(t.peca?' — '+t.peca:'')+(t.fabricante?' ('+t.fabricante+')':''), leitura:leitura, base:t.base, cal:!!t.cal});
+  saveAll(); renderTable(); toast('🔧 Troca registrada no histórico');
 }
 function deleteTask(){
   if(!editingId) return;
@@ -992,6 +1073,9 @@ function boot(){
   $('#baixaOverlay').addEventListener('click',e=>{ if(e.target.id==='baixaOverlay') closeBaixa(); });
   $('#histClose').addEventListener('click',closeHist);
   $('#histOverlay').addEventListener('click',e=>{ if(e.target.id==='histOverlay') closeHist(); });
+  $('#f_cat').addEventListener('change',onCatChange);
+  $('#f_grupoNew').addEventListener('click',e=>{ e.preventDefault(); novoGrupo(); });
+  $('#f_troca').addEventListener('click',registrarTroca);
   $('#osClose').addEventListener('click',osClose);
   $('#osReg').addEventListener('click',osRegDispatch);
   $('#osDel').addEventListener('click',()=>{ if(OSCTX.mode==='edit') excluirOS(OSCTX.idx); });
