@@ -1,12 +1,12 @@
 window.JETFOR_DASH = {
  "fleet": [
   {"mat":"PR-ARN","modelo":"Beechcraft B200GT","fab":"Beechcraft","tcds":"EM-8005-13","assentos":"10+ (confirmar)","enq":"135.411(a)(2)","sasc":true,"obs":"Entra no SASC/PMAC · S/N BY-021","mapa":"PR-ARN"},
-  {"mat":"(em inclusão)","modelo":"Cessna Citation 550","fab":"Cessna","tcds":"EM-8403-02","assentos":"10+ (confirmar)","enq":"135.411(a)(2)","sasc":true,"obs":"Em processo de inclusão","mapa":null},
+  {"mat":"PR-FHN","modelo":"Cessna Citation 550","fab":"Cessna","tcds":"EM-8403-02","assentos":"10+ (confirmar)","enq":"135.411(a)(2)","sasc":true,"obs":"S/N 550-0222 · em inclusão no SASC","mapa":"PR-FHN"},
   {"mat":"PT-LJQ","modelo":"Cessna Citation S550","fab":"Cessna","tcds":"EM-8403 (confirmar)","assentos":"10+ (confirmar)","enq":"135.411(a)(2)","sasc":true,"obs":"S/N S550-0113 · em inclusão no SASC","mapa":"PT-LJQ"},
   {"mat":"PR-LJA (confirmar)","modelo":"Embraer EMB-505 (Phenom 300)","fab":"Embraer","tcds":"EA-2009T12","assentos":"até 10 (tipo cert. 11 ocup.)","enq":"135.411(a)(2)","sasc":true,"obs":"SASC pela certificação de tipo (até 10 assentos pax)","mapa":null},
   {"mat":"PP-SCF","modelo":"Beechcraft King Air C90","fab":"Beechcraft","tcds":"a levantar","assentos":"5 (config.)","enq":"135.411(a)(1)","sasc":false,"obs":"≤9 assentos","mapa":null},
   {"mat":"PS-ALT","modelo":"Beechcraft King Air C90A","fab":"Beechcraft","tcds":"a levantar","assentos":"≤9 (confirmar)","enq":"135.411(a)(1)","sasc":false,"obs":"PMAC/SASC cancelados 2022 (isenção IS 120-016 rev B)","mapa":null},
-  {"mat":"PR-AEX","modelo":"Hawker 400A (Beechjet 400)","fab":"Hawker","tcds":"a levantar","assentos":"≤9 (confirmar)","enq":"135.411(a)(1)","sasc":false,"obs":"≤9 assentos","mapa":null}
+  {"mat":"PT-WHB","modelo":"Hawker 400A (Beechjet 400)","fab":"Hawker","tcds":"a levantar","assentos":"≤9 (confirmar)","enq":"135.411(a)(1)","sasc":false,"obs":"S/N RK-73 · substitui PR-AEX","mapa":"PT-WHB"}
  ],
  "modeloOperacional":"A JetFor é OPERADORA e faz o CONTROLE da aeronavegabilidade continuada (papel tipo CAMO). Não executa manutenção: não possui ferramental nem estoque próprios. Toda a manutenção prática (serviços, calibrações, inspeções físicas, pesagem) é executada por OFICINAS certificadas RBAC 145 contratadas — a JetFor programa, controla os prazos, exige os comprovantes e audita os fornecedores.",
  "atividades": [

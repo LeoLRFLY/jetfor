@@ -575,8 +575,16 @@ function detalheAtiv(a){
 }
 
 // ---------- INÍCIO (Dashboard da frota) ----------
+function matchAcmapKey(f){
+  const am=STATE.acmaps||{};
+  for(const k in am){ if(am[k].aeronave && am[k].aeronave.matricula && am[k].aeronave.matricula===f.mat) return k; }
+  for(const k in am){ if(am[k].aeronave && f.modelo && am[k].aeronave.modelo===f.modelo) return k; }
+  return null;
+}
 function drawFleet(){
   const fleet=STATE.frota||[], ats=window.JETFOR_DASH.atividades;
+  // auto-vincula cada card ao mapa correspondente (por matrícula ou modelo)
+  fleet.forEach(f=>{ if(!f.mapa){ const k=matchAcmapKey(f); if(k) f.mapa=k; } });
   const nS=fleet.filter(f=>f.sasc).length, nN=fleet.length-nS;
   const g=ats.filter(a=>a.escopo==='Geral').length, s=ats.length-g;
   $('#dashKpis').innerHTML=[['Aeronaves',fleet.length,''],['Frota SASC',nS,'sasc'],['Não-SASC',nN,'non'],['Ativ. gerais',g,''],['Ativ. SASC',s,'sasc']]
