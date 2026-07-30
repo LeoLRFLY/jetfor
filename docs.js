@@ -14,7 +14,28 @@ function docList(scope){
   if(scope==='geral'){ STATE.docsGeral = STATE.docsGeral || []; return STATE.docsGeral; }
   const m = STATE.acmaps[scope]; if(!m) return []; m.docs = m.docs || []; return m.docs;
 }
-function docCats(scope){ return scope==='geral' ? DOC_CATS_GERAL : DOC_CATS_AC; }
+function customCats(scope){
+  if(scope==='geral'){ STATE.docCatsGeral = STATE.docCatsGeral || []; return STATE.docCatsGeral; }
+  const m = STATE.acmaps[scope]; if(!m) return []; m.docCatsExtra = m.docCatsExtra || []; return m.docCatsExtra;
+}
+function docCats(scope){
+  const base = scope==='geral' ? DOC_CATS_GERAL : DOC_CATS_AC;
+  const extra = customCats(scope).filter(c=>base.indexOf(c)<0);
+  // 'Outros' sempre por último
+  const b = base.filter(c=>c!=='Outros'), out = base.indexOf('Outros')>=0?['Outros']:[];
+  return b.concat(extra).concat(out);
+}
+function addDocCat(scope){
+  let name = prompt('Nome da nova pasta (ex.: SOP, PTO, MGSO, Cartas...):');
+  if(name==null) return; name = name.trim(); if(!name) return;
+  if(docCats(scope).some(c=>c.toLowerCase()===name.toLowerCase())){ toast('Já existe uma pasta "'+name+'"'); return; }
+  customCats(scope).push(name); saveAll(); toast('✔ Pasta "'+name+'" criada'); renderDocs(scope);
+}
+function removeDocCat(scope, name){
+  if(docList(scope).some(d=>d.categoria===name)){ toast('Esvazie a pasta "'+name+'" antes de removê-la'); return; }
+  const cc = customCats(scope); const i = cc.indexOf(name);
+  if(i>=0 && confirm('Remover a pasta "'+name+'"?')){ cc.splice(i,1); saveAll(); renderDocs(scope); }
+}
 function docNewId(){ return 'doc'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36); }
 function fmtMB(b){ return b==null?'':(b/1048576).toFixed(b<1048576?2:1)+' MB'; }
 
@@ -81,10 +102,13 @@ function renderDocs(scope){
       <input id="docRev" placeholder="Rev (opc.)" style="width:80px">
       <input id="docVal" placeholder="Validade (opc.)" style="width:120px">
       <button class="btn g sm" id="docUp">⬆ Enviar documento</button>
+      <button class="btn o sm" id="docNewCat">➕ Nova pasta</button>
     </div>`;
+  const custom = customCats(scope);
   cats.forEach(cat=>{
     const items = list.filter(d=>d.categoria===cat);
-    h += `<div class="doccat"><h3>${esc(cat)} <span class="muted">(${items.length})</span></h3>`;
+    const isCustom = custom.indexOf(cat)>=0;
+    h += `<div class="doccat"><h3><span>${esc(cat)}</span><span class="muted">(${items.length})${isCustom?` <button class="btn o sm catdel no-print" data-cat="${esc(cat)}" title="remover pasta">×</button>`:''}</span></h3>`;
     if(!items.length){ h += `<div class="docrow muted">— vazio —</div>`; }
     else items.forEach(d=>{
       h += `<div class="docrow">
@@ -92,6 +116,7 @@ function renderDocs(scope){
         ${d.rev?`<span class="badge n">rev ${esc(d.rev)}</span>`:''}
         ${d.validade?`<span class="badge n" style="background:#b45309">val ${esc(d.validade)}</span>`:''}
         <span class="muted">${fmtMB(d.tamanho)}</span>
+        <select class="docmove no-print" data-id="${esc(d.id)}" title="mover de pasta">${cats.map(c=>`<option ${c===d.categoria?'selected':''}>${esc(c)}</option>`).join('')}</select>
         <button class="btn o sm docdel no-print" data-id="${esc(d.id)}" title="excluir">🗑</button>
       </div>`;
     });
@@ -111,6 +136,14 @@ function renderDocs(scope){
     if(r) renderDocs(scope);
   });
   target.querySelectorAll('.docdel').forEach(b=>b.addEventListener('click',()=>excluirDoc(scope, b.dataset.id)));
+  const nc = target.querySelector('#docNewCat');
+  if(nc) nc.addEventListener('click',()=>addDocCat(scope));
+  target.querySelectorAll('.catdel').forEach(b=>b.addEventListener('click',()=>removeDocCat(scope, b.dataset.cat)));
+  target.querySelectorAll('.docmove').forEach(s=>s.addEventListener('change',()=>{ moveDoc(scope, s.dataset.id, s.value); }));
+}
+function moveDoc(scope, id, novaCat){
+  const d = docList(scope).find(x=>x.id===id); if(!d) return;
+  d.categoria = novaCat; saveAll(); renderDocs(scope);
 }
 
 function renderDocsGeral(){ renderDocs('geral'); }
