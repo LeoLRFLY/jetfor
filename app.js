@@ -28,7 +28,7 @@ function baseUnit(base){
   return 'h';   // horas, TSN, TSO
 }
 const CAT_LABEL={celula:'Célula',motor:'Motor',helice:'Hélice',ica:'ICA'};
-const TIPO_LABEL={horas:'Horas',ciclos:'Ciclos',pousos:'Pousos',calendario:'Calendário'};
+const TIPO_LABEL={horas:'Horas',ciclos:'Ciclos',pousos:'Pousos',calendario:'Calendário',oc:'OC'};
 // limiar de "próximo do vencimento" por unidade
 const WARN = { h:50, pou:100, cic:100, dias:60 };
 
@@ -152,7 +152,7 @@ function subscribeAC(ac){
     if(d.docs) m.docs=d.docs;
     if(d.docCatsExtra) m.docCatsExtra=d.docCatsExtra;
     if(d.grupos) m.grupos=d.grupos;
-    migrateEngineCounters(m); reclassIca(m); applyTaskPatch(m,ac);
+    migrateEngineCounters(m); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac);
     if(ac===STATE.currentAC){ STATE.contadores=m.contadores; STATE.tarefas=m.tarefas; renderCounters(); renderTable(); }
   });
 }
@@ -202,7 +202,30 @@ function applyTaskPatch(m, ac){
   const have = new Set(m.tarefas.map(t=>normName(t.nome)));
   window.JETFOR_PATCH[ac].forEach(pt=>{ const kn=normName(pt.nome); if(!have.has(kn)){ m.tarefas.push(JSON.parse(JSON.stringify(pt))); have.add(kn); } });
 }
-function migrateMapsFull(){ Object.keys(STATE.acmaps||{}).forEach(ac=>{ const m=STATE.acmaps[ac]; migrateEngineCounters(m); reclassIca(m); applyTaskPatch(m,ac); }); }
+// corrige APENAS a organização (grupo + lado LH/RH + categoria + base do contador)
+// sem tocar em execução/cal/histórico/obs → preserva 100% das baixas. Idempotente.
+function reclassGroups(m, ac){
+  if(!window.JETFOR_RECLASS || !window.JETFOR_RECLASS[ac]) return;
+  const map = window.JETFOR_RECLASS[ac];
+  const c = m.contadores = m.contadores || {};
+  let usesH2=false;
+  (m.tarefas||[]).forEach(t=>{
+    if(!t) return;
+    const fix = map[normName(t.nome)];
+    if(!fix) return;
+    if(fix.grupo!=null)     t.grupo = fix.grupo;
+    if(fix.categoria!=null) t.categoria = fix.categoria;
+    if(fix.unidade!==undefined) t.unidade = fix.unidade;
+    if(fix.base!=null)      t.base = fix.base;   // ex.: helice2_tsn
+    if(fix.base && /^helice2_/.test(fix.base)) usesH2=true;
+  });
+  // garante contador da Hélice 2 (mesma referência da Hélice 1 / célula)
+  if(usesH2){
+    const ref = c.helice1_tsn!=null?c.helice1_tsn:(c.celula_horas!=null?c.celula_horas:null);
+    if(ref!=null){ if(c.helice2_tsn==null) c.helice2_tsn=ref; if(c.helice2_tso==null) c.helice2_tso=ref; if(c.helice2_horas==null) c.helice2_horas=ref; }
+  }
+}
+function migrateMapsFull(){ Object.keys(STATE.acmaps||{}).forEach(ac=>{ const m=STATE.acmaps[ac]; migrateEngineCounters(m); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac); }); }
 function buildCounterGroups(){
   const ac = (cur()&&cur().aeronave)||{};
   const nM = ac.nMotores!=null? ac.nMotores : 2;
@@ -908,19 +931,24 @@ function renderMapaSheet(k){
   let h=`<div class="panel"><h2><span class="tag">${esc((sh.title||'DA').split('—')[0].trim())}</span> ${esc(sh.title||'DA')} — ${esc(STATE.currentAC)}</h2><div class="pbody">`;
   if(sh.stale) h+=`<div class="stale">⚠ Esta aba veio do Excel como template (dados de outra aeronave). Edite/limpe conforme as DAs reais.</div>`;
   h+=`<button class="btn g sm no-print" id="daNew" style="margin-bottom:10px">➕ Nova DA</button> <button class="btn o sm no-print" id="daLimpar" style="margin-bottom:10px">🧹 Limpar rodapés do template</button>`;
-  h+=`<div class="tblwrap"><table class="da"><thead><tr><th>#</th><th>Nº / DA</th><th>Sinopse</th><th>Cat</th><th>R. Primário / Situação</th><th>Tipo</th><th class="num">Freq.</th><th class="num">Vence</th><th class="num">Restante</th><th>Cumprido</th><th>Cad/Pág</th><th class="no-print">Ações</th></tr></thead><tbody>`;
+  const NC=DA.cols.length;
+  h+=`<div class="tblwrap"><table class="da datab"><thead><tr><th>#</th>${DA.cols.map(c=>`<th>${esc(c)}</th>`).join('')}<th class="no-print">Ações</th></tr></thead><tbody>`;
   let nr=0;
   sh.rows.forEach((r,idx)=>{
-    if(r.sec!==undefined){ h+=`<tr class="dasec"><td colspan="12">${esc(r.sec)} <button class="btn o sm no-print dasecdel" data-i="${idx}" title="remover seção">🗑</button></td></tr>`; return; }
+    if(r.sec!==undefined){ h+=`<tr class="dasec"><td colspan="${NC+2}">${esc(r.sec)} <button class="btn o sm no-print dasecdel" data-i="${idx}" title="remover seção">🗑</button></td></tr>`; return; }
     nr++;
     const tipo=r.tipo||(r.base?'repetitiva':'unica');
-    let freq='—',venc='—',disp='—';
+    let cells=DA_KEYS.map(key=>esc(r[key]!=null?r[key]:''));   // 15 colunas fiéis ao Excel
     if(tipo==='repetitiva'){
       const c=compute(r);
-      if(c.num){ const u=c.num.unit; if(r.intervalo!=null) freq=fmtN(r.intervalo,0)+' '+u; if(c.num.venc!=null) venc=fmtN(c.num.venc,1)+' '+u; if(c.num.disp!=null) disp=`<span class="${c.num.disp<0?'disp-neg':''}">${fmtN(c.num.disp,1)} ${u}</span>`; }
-      if(c.cal){ const dd=c.cal.disp; const cs=`${fmtDate(c.cal.venc)} <span class="${dd!=null&&dd<0?'disp-neg':''}">(${dd!=null?dd+'d':'—'})</span>`; venc=(venc==='—')?cs:(venc+' · '+cs); if(freq==='—'&&r.cal) freq=r.cal.meses+'m'; }
-    } else { freq=r.freq||'única'; venc=r.venc||'—'; disp=r.disp||'—'; }
-    h+=`<tr class="darow" data-i="${idx}" style="cursor:pointer"><td class="nrcol">${nr}</td><td><b>${esc(r.numero||'—')}</b></td><td>${esc(r.sinopse||'')}</td><td>${esc(r.cat||'')}</td><td class="obscell">${esc(r.rprimario||'')}</td><td>${tipo==='repetitiva'?'🔁 Repet.':'Única'}</td><td class="num">${freq}</td><td class="num">${venc}</td><td class="num">${disp}</td><td>${esc(r.cumprido||'')} ${fadtsOf(r).map(fd=>`<a href="${esc(fd.url)}" target="_blank" rel="noopener" title="${esc(fd.nome)}" onclick="event.stopPropagation()">📎</a>`).join(' ')}</td><td class="obscell">${esc(r.cadpag||'')}</td><td class="no-print"><button class="btn o sm" data-daedit="${idx}">✎</button> <button class="btn o sm" data-dadel="${idx}">🗑</button></td></tr>`;
+      if(c.num){ const u=c.num.unit;
+        if(r.intervalo!=null) cells[4]=fmtN(r.intervalo,0)+' '+u;      // Freq.
+        if(c.num.venc!=null) cells[11]=fmtN(c.num.venc,1)+' '+u;       // Venc.
+        if(c.num.disp!=null) cells[9]=`<span class="${c.num.disp<0?'disp-neg':''}">${fmtN(c.num.disp,1)} ${u}</span>`; } // Disp.
+      if(c.cal){ const dd=c.cal.disp; cells[11]=(cells[11]&&cells[11]!=='')?cells[11]+' · ':''; cells[11]+=`${fmtDate(c.cal.venc)} <span class="${dd!=null&&dd<0?'disp-neg':''}">(${dd!=null?dd+'d':'—'})</span>`; }
+    }
+    const fadt=fadtsOf(r).map(fd=>`<a href="${esc(fd.url)}" target="_blank" rel="noopener" title="${esc(fd.nome)}" onclick="event.stopPropagation()">📎</a>`).join(' ');
+    h+=`<tr class="darow" data-i="${idx}" style="cursor:pointer"><td class="nrcol">${tipo==='repetitiva'?'🔁':''}${nr}</td>${cells.map(c=>`<td>${c}</td>`).join('')}<td class="no-print">${fadt} <button class="btn o sm" data-daedit="${idx}">✎</button> <button class="btn o sm" data-dadel="${idx}">🗑</button></td></tr>`;
   });
   h+=`</tbody></table></div></div></div>`;
   $('#mapa-sheet').innerHTML=h;
@@ -1007,7 +1035,8 @@ function daIsRodape(r){
   if(r.sec!==undefined) return DA_RODAPE_RX.test(r.sec||'');
   const t=((r.numero||'')+' '+(r.sinopse||'')+' '+(r.rprimario||'')+' '+(r.cumprido||'')+' '+(r.cadpag||''));
   if(DA_RODAPE_RX.test(t)) return true;
-  if(!(r.numero||'').trim() && !(r.sinopse||'').trim() && !(r.rprimario||'').trim() && !(r.cadpag||'').trim() && !r.base) return true;
+  // sem nº E sem sinopse E não é repetitiva = não é uma DA de verdade (rodapé/assinatura)
+  if(!(r.numero||'').trim() && !(r.sinopse||'').trim() && !r.base && r.tipo!=='repetitiva') return true;
   return false;
 }
 function limparRodapes(k){

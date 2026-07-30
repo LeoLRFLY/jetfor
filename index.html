@@ -361,6 +361,8 @@
   tr.grp .grpname{font-weight:700}
   tr.grp .grpedit,tr.grp .grpdel{padding:0 6px;font-size:11px;margin-left:4px;opacity:.55}
   tr.grp:hover .grpedit,tr.grp:hover .grpdel{opacity:1}
+  table.da.datab th,table.da.datab td{font-size:10px;padding:4px 6px;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+  table.da.datab td.obscell{white-space:normal}
   /* ---- oficinas & auditorias ---- */
   .ofgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
   .ofcard{background:#fff;border:1px solid var(--line);border-left:5px solid var(--navy2);border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
@@ -620,6 +622,7 @@
 <script src="da_data.js"></script>
 <script src="acmaps_data.js"></script>
 <script src="patch_data.js"></script>
+<script src="reclass_data.js"></script>
 <script src="iio_data.js"></script>
 <script src="forms.js"></script>
 <script src="app.js"></script>
