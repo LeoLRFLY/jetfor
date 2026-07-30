@@ -556,6 +556,15 @@
       <div><button class="btn o" id="osClose">Fechar</button><button class="btn o" id="osDel" style="display:none">🗑 Excluir</button><button class="btn p" onclick="window.print()">🖨 Imprimir / PDF</button><button class="btn g" id="osReg">✔ Registrar no histórico</button></div></div>
   </div>
 </div>
+<!-- HISTÓRICO DE CUMPRIMENTOS (por tarefa) -->
+<div class="overlay" id="histOverlay">
+  <div class="modal" style="width:680px;max-width:100%">
+    <h3 id="histTitle">Histórico de cumprimentos</h3>
+    <div class="mbody" style="display:block" id="histBody"></div>
+    <div class="mfoot"><span class="muted" style="font-size:11px">Registro interno (não sai na impressão). Alimentado pelas baixas de execução.</span>
+      <div><button class="btn o" id="histClose">Fechar</button></div></div>
+  </div>
+</div>
 <!-- DAR BAIXA EM MASSA -->
 <div class="overlay" id="baixaOverlay">
   <div class="modal" style="width:760px;max-width:100%">

@@ -273,11 +273,11 @@ function aplicarBaixa(){
   const m=cur(); let n=0, skip=0;
   ids.forEach(id=>{
     const t=m.tarefas.find(x=>x.id===id); if(!t) return;
-    let upd=false;
-    if(t.base && t.base!=='calendario' && t.intervalo!=null && readings[t.base]!=null){ t.exec=readings[t.base]; upd=true; }
+    let upd=false, leitura=null;
+    if(t.base && t.base!=='calendario' && t.intervalo!=null && readings[t.base]!=null){ t.exec=readings[t.base]; leitura=readings[t.base]; upd=true; }
     if(t.cal){ t.cal.exec=data; upd=true; }
     if(ref){ t.obs=ref; }   // oficina executante vai para o campo Observações
-    if(upd) n++; else skip++;
+    if(upd){ t.hist=t.hist||[]; t.hist.push({data:data, oficina:ref||'', leitura:leitura, base:t.base, cal:!!t.cal}); n++; } else skip++;
   });
   saveAll(); renderTable();
   toast('✔ Baixa aplicada em '+n+' tarefa(s)'+(skip?' ('+skip+' sem intervalo/calendário — não alteradas)':''));
@@ -475,11 +475,35 @@ function rowEl(t,c,n){
     `<td>${calHtml}</td>`+
     `<td class="obscell">${obs}</td>`+
     `<td>${pill}</td>`+
-    `<td class="act no-print"><button class="btn o sm" data-edit="${t.id}">✎</button></td>`;
-  tr.querySelector('[data-edit]').addEventListener('click',()=>openModal(t.id));
+    `<td class="act no-print"><button class="btn o sm" data-hist="${t.id}" title="histórico de cumprimentos">🕘</button> <button class="btn o sm" data-edit="${t.id}">✎</button></td>`;
+  tr.style.cursor='pointer'; tr.title='Clique para ver o histórico de cumprimentos';
+  tr.addEventListener('click',e=>{ if(e.target.closest('input,button,a,select')) return; openTaskHist(t.id); });
+  tr.querySelector('[data-hist]').addEventListener('click',e=>{ e.stopPropagation(); openTaskHist(t.id); });
+  tr.querySelector('[data-edit]').addEventListener('click',e=>{ e.stopPropagation(); openModal(t.id); });
   return tr;
 }
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+function unitForBase(base){ base=base||''; if(base.includes('horas')) return 'h'; if(base.includes('ciclos')) return 'ciclos'; if(base.includes('pousos')) return 'pousos'; return ''; }
+// ---------- histórico de cumprimentos por tarefa ----------
+function openTaskHist(id){
+  const t=cur().tarefas.find(x=>x.id===id); if(!t) return;
+  const h=(t.hist||[]).slice().reverse();
+  const ultExec = t.exec!=null ? (fmtN(t.exec,1)+' '+unitForBase(t.base)) : (t.cal&&t.cal.exec ? fmtDate(new Date(t.cal.exec+'T00:00:00')) : '—');
+  let body=`<div class="fsec">${esc(t.nome)}</div>`;
+  body+=`<p class="lead"><b>Grupo:</b> ${esc(t.grupo||'—')} · <b>Base:</b> ${esc(BASE_LABEL[t.base]||t.base)} · <b>Intervalo:</b> ${t.intervalo!=null?fmtN(t.intervalo,0)+' '+unitForBase(t.base):(t.vencFixo!=null?'fixo':'—')}<br>
+    <b>Última execução:</b> ${ultExec} · <b>Observação atual (oficina):</b> ${esc(t.obs||'—')}</p>`;
+  if(!h.length){ body+=`<p class="lead muted">Nenhum cumprimento registrado ainda. Selecione a tarefa e use <b>Dar baixa</b> para registrar a execução, oficina e leitura.</p>`; }
+  else{
+    body+=`<div class="tblwrap"><table class="da"><thead><tr><th>Data</th><th>Oficina executante</th><th>Leitura na execução</th></tr></thead><tbody>`;
+    h.forEach(e=>{ const leit = e.leitura!=null ? (fmtN(e.leitura,1)+' '+unitForBase(e.base)) : (e.cal?'(calendário)':'—');
+      body+=`<tr><td>${e.data?fmtDate(new Date(e.data+'T00:00:00')):'—'}</td><td>${esc(e.oficina||'—')}</td><td class="num">${leit}</td></tr>`; });
+    body+=`</tbody></table></div>`;
+  }
+  $('#histTitle').textContent='Histórico de cumprimentos — '+STATE.currentAC;
+  $('#histBody').innerHTML=body;
+  $('#histOverlay').classList.add('show');
+}
+function closeHist(){ $('#histOverlay').classList.remove('show'); }
 
 // ---------- FILTRO grupos ----------
 function fillGroupFilters(){
@@ -935,6 +959,8 @@ function boot(){
   $('#baixaOk').addEventListener('click',aplicarBaixa);
   $('#baixaCancel').addEventListener('click',closeBaixa);
   $('#baixaOverlay').addEventListener('click',e=>{ if(e.target.id==='baixaOverlay') closeBaixa(); });
+  $('#histClose').addEventListener('click',closeHist);
+  $('#histOverlay').addEventListener('click',e=>{ if(e.target.id==='histOverlay') closeHist(); });
   $('#osClose').addEventListener('click',osClose);
   $('#osReg').addEventListener('click',osRegDispatch);
   $('#osDel').addEventListener('click',()=>{ if(OSCTX.mode==='edit') excluirOS(OSCTX.idx); });
