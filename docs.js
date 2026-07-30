@@ -97,7 +97,7 @@ function renderDocs(scope){
     h += `<div class="fdecl" style="background:#fff7ed;border-left-color:#b45309">⚠ <b>Firebase Storage não ativado.</b> Ative em Build → Storage no console do Firebase pra habilitar o envio de arquivos. As pastas já funcionam; o upload libera assim que o Storage estiver ligado.</div>`;
   }
   h += `<div class="docup no-print">
-      <input type="file" id="docFile">
+      <input type="file" id="docFile" multiple>
       <select id="docCat">${cats.map(c=>`<option>${esc(c)}</option>`).join('')}</select>
       <input id="docRev" placeholder="Rev (opc.)" style="width:80px">
       <input id="docVal" placeholder="Validade (opc.)" style="width:120px">
@@ -128,12 +128,16 @@ function renderDocs(scope){
   // wire
   const up = target.querySelector('#docUp');
   if(up) up.addEventListener('click', async ()=>{
-    const f = target.querySelector('#docFile').files[0];
+    const files = target.querySelector('#docFile').files;
+    if(!files || !files.length){ toast('Selecione um ou mais arquivos'); return; }
     const cat = target.querySelector('#docCat').value;
     const rev = target.querySelector('#docRev').value.trim();
     const val = target.querySelector('#docVal').value.trim();
-    const r = await uploadDoc(scope, f, cat, {rev,validade:val});
-    if(r) renderDocs(scope);
+    up.disabled=true; let ok=0;
+    for(const f of files){ const r = await uploadDoc(scope, f, cat, {rev,validade:val}); if(r) ok++; }
+    up.disabled=false;
+    if(files.length>1) toast('✔ '+ok+'/'+files.length+' documentos enviados');
+    if(ok) renderDocs(scope);
   });
   target.querySelectorAll('.docdel').forEach(b=>b.addEventListener('click',()=>excluirDoc(scope, b.dataset.id)));
   const nc = target.querySelector('#docNewCat');

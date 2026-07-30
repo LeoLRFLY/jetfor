@@ -865,7 +865,8 @@ function renderInicio(){
 // ---------- Sub-abas do MAPA: DA & Boletins (por aeronave) ----------
 // ---------- DAs editáveis + calculadora (repetitivas) ----------
 const DA_KEYS=['numero','sinopse','bs','cat','freq','data','tsn','tso','rprimario','disp','exec','venc','obs','cadpag','cumprido'];
-let DACTX={sheet:null,idx:-1}; let DAFADT={remove:false};
+let DACTX={sheet:null,idx:-1}; let DAFADT={removed:new Set()};
+function fadtsOf(r){ return (r&&r.fadts&&r.fadts.length)?r.fadts:((r&&r.fadt)?[r.fadt]:[]); }
 async function uploadFADT(file, ac, sheet){
   if(typeof STORAGE==='undefined' || !STORAGE){ toast('⚠ Ative o Firebase Storage p/ anexar FADT'); return null; }
   const safe=file.name.replace(/[^\w.\- ]+/g,'_');
@@ -904,7 +905,7 @@ function renderMapaSheet(k){
       if(c.num){ const u=c.num.unit; if(r.intervalo!=null) freq=fmtN(r.intervalo,0)+' '+u; if(c.num.venc!=null) venc=fmtN(c.num.venc,1)+' '+u; if(c.num.disp!=null) disp=`<span class="${c.num.disp<0?'disp-neg':''}">${fmtN(c.num.disp,1)} ${u}</span>`; }
       if(c.cal){ const dd=c.cal.disp; const cs=`${fmtDate(c.cal.venc)} <span class="${dd!=null&&dd<0?'disp-neg':''}">(${dd!=null?dd+'d':'—'})</span>`; venc=(venc==='—')?cs:(venc+' · '+cs); if(freq==='—'&&r.cal) freq=r.cal.meses+'m'; }
     } else { freq=r.freq||'única'; venc=r.venc||'—'; disp=r.disp||'—'; }
-    h+=`<tr class="darow" data-i="${idx}" style="cursor:pointer"><td class="nrcol">${nr}</td><td><b>${esc(r.numero||'—')}</b></td><td>${esc(r.sinopse||'')}</td><td>${esc(r.bs||'')}</td><td>${esc(r.cat||'')}</td><td>${tipo==='repetitiva'?'🔁 Repet.':'Única'}</td><td class="num">${freq}</td><td class="num">${venc}</td><td class="num">${disp}</td><td>${esc(r.cumprido||'')}${r.fadt?` <a href="${esc(r.fadt.url)}" target="_blank" rel="noopener" title="FADT anexada" onclick="event.stopPropagation()">📎</a>`:''}</td><td class="obscell">${esc(r.obs||'')}</td><td class="no-print"><button class="btn o sm" data-daedit="${idx}">✎</button> <button class="btn o sm" data-dadel="${idx}">🗑</button></td></tr>`;
+    h+=`<tr class="darow" data-i="${idx}" style="cursor:pointer"><td class="nrcol">${nr}</td><td><b>${esc(r.numero||'—')}</b></td><td>${esc(r.sinopse||'')}</td><td>${esc(r.bs||'')}</td><td>${esc(r.cat||'')}</td><td>${tipo==='repetitiva'?'🔁 Repet.':'Única'}</td><td class="num">${freq}</td><td class="num">${venc}</td><td class="num">${disp}</td><td>${esc(r.cumprido||'')} ${fadtsOf(r).map(fd=>`<a href="${esc(fd.url)}" target="_blank" rel="noopener" title="${esc(fd.nome)}" onclick="event.stopPropagation()">📎</a>`).join(' ')}</td><td class="obscell">${esc(r.obs||'')}</td><td class="no-print"><button class="btn o sm" data-daedit="${idx}">✎</button> <button class="btn o sm" data-dadel="${idx}">🗑</button></td></tr>`;
   });
   h+=`</tbody></table></div></div></div>`;
   $('#mapa-sheet').innerHTML=h;
@@ -938,13 +939,14 @@ function openDA(k,idx){
     <div class="fld"><label>Cumprido</label><input id="da_cumpr" value="${v('cumprido')}" placeholder="Sim / Não / N/A"></div>
     <div class="fld"><label>R. Primário / ref.</label><input id="da_rprim" value="${v('rprimario')}"></div>
     <div class="fld"><label>Cad/Pág (FCDA)</label><input id="da_cad" value="${v('cadpag')}"></div>
-    <div class="fld full"><label>FADT / anexo (comprovante)</label>
-      <div id="da_fadtCur">${r.fadt?`📎 <a href="${esc(r.fadt.url)}" target="_blank" rel="noopener">${esc(r.fadt.nome)}</a> <button type="button" class="btn o sm" id="da_fadtDel">remover</button>`:'<span class="muted">nenhum anexo</span>'}</div>
-      <input type="file" id="da_fadt" class="no-print" style="margin-top:5px"></div>
+    <div class="fld full"><label>FADT / anexos (comprovantes)</label>
+      <div id="da_fadtCur">${fadtsOf(r).length?fadtsOf(r).map((fd,i)=>`<div>📎 <a href="${esc(fd.url)}" target="_blank" rel="noopener">${esc(fd.nome)}</a> <button type="button" class="btn o sm fadtRm" data-i="${i}">remover</button></div>`).join(''):'<span class="muted">nenhum anexo</span>'}</div>
+      <input type="file" id="da_fadt" class="no-print" multiple style="margin-top:5px">
+      <span class="hint">Pode selecionar vários arquivos de uma vez.</span></div>
     <div class="fld full"><label>Observações</label><textarea id="da_obs">${esc(r.obs||'')}</textarea></div>`;
-  DAFADT={remove:false};
+  DAFADT={removed:new Set()};
   $('#daTitle').textContent = idx!=null ? ('DA '+(r.numero||'')) : 'Nova DA';
-  const fdel=$('#da_fadtDel'); if(fdel) fdel.addEventListener('click',()=>{ DAFADT.remove=true; $('#da_fadtCur').innerHTML='<span class="muted">anexo será removido ao salvar</span>'; });
+  $('#daBody').querySelectorAll('.fadtRm').forEach(btn=>btn.addEventListener('click',()=>{ DAFADT.removed.add(+btn.dataset.i); btn.parentElement.style.opacity='.4'; btn.parentElement.querySelector('a').style.textDecoration='line-through'; btn.disabled=true; }));
   const toggleRep=()=>{ const rep=$('#da_tipo').value==='repetitiva';
     ['da_base','da_int','da_exec','da_calm','da_cale'].forEach(id=>{ const fld=$('#'+id).closest('.fld'); if(fld) fld.style.display=rep?'':'none'; }); };
   $('#da_tipo').addEventListener('change',toggleRep); toggleRep();
@@ -961,9 +963,11 @@ async function saveDA(){
     const cm=num(g('da_calm')), ce=g('da_cale'); if(cm!=null&&ce) row.cal={meses:cm,exec:ce};
   }
   if(!row.numero && !row.sinopse){ toast('Informe o nº ou a sinopse da DA'); return; }
-  const fileEl=$('#da_fadt'); const f=fileEl&&fileEl.files[0];
-  if(f){ const up=await uploadFADT(f, STATE.currentAC, k); if(up) row.fadt=up; }
-  else if(DAFADT.remove){ row.fadt=null; }
+  // anexos: mantém os existentes não-removidos + novos (em massa)
+  let fadts = (DACTX.idx>=0) ? fadtsOf(sh.rows[DACTX.idx]).filter((_,i)=>!DAFADT.removed.has(i)) : [];
+  const files=($('#da_fadt')||{}).files||[];
+  for(const f of files){ const up=await uploadFADT(f, STATE.currentAC, k); if(up) fadts.push(up); }
+  row.fadts=fadts; row.fadt=null;
   if(DACTX.idx>=0) sh.rows[DACTX.idx]=Object.assign({},sh.rows[DACTX.idx],row);
   else sh.rows.push(row);
   saveAll(); closeDA(); renderMapaSheet(k); toast('✔ DA salva');
