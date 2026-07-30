@@ -16,13 +16,17 @@ const BASE_LABEL = {
   celula_horas:'Célula · h', celula_pousos:'Célula · pousos', celula_ciclos:'Célula · ciclos',
   motor1_horas:'Motor 1 · h', motor1_ciclos:'Motor 1 · ciclos', motor1_pousos:'Motor 1 · pousos',
   motor2_horas:'Motor 2 · h', motor2_ciclos:'Motor 2 · ciclos', motor2_pousos:'Motor 2 · pousos',
+  helice1_horas:'Hélice 1 · h', helice2_horas:'Hélice 2 · h', helice1_ciclos:'Hélice 1 · cic', helice2_ciclos:'Hélice 2 · cic',
   helice_horas:'Hélice · h', calendario:'Calendário'
 };
-const BASE_UNIT = {
-  celula_horas:'h', motor1_horas:'h', motor2_horas:'h', helice_horas:'h',
-  celula_pousos:'pou', motor1_pousos:'pou', motor2_pousos:'pou',
-  celula_ciclos:'cic', motor1_ciclos:'cic', motor2_ciclos:'cic'
-};
+function baseUnit(base){
+  if(!base||base==='calendario') return '';
+  if(base.endsWith('_pousos')) return 'pou';
+  if(base.endsWith('_ciclos')) return 'cic';
+  return 'h';
+}
+const CAT_LABEL={celula:'Célula',motor:'Motor',helice:'Hélice',ica:'ICA'};
+const TIPO_LABEL={horas:'Horas',ciclos:'Ciclos',pousos:'Pousos',calendario:'Calendário'};
 // limiar de "próximo do vencimento" por unidade
 const WARN = { h:50, pou:100, cic:100, dias:60 };
 
@@ -45,7 +49,7 @@ function compute(task){
     let venc = null;
     if(task.intervalo!=null && task.exec!=null) venc = task.exec + task.intervalo;   // VENC = EXEC + INTERVALO
     else if(task.vencFixo!=null) venc = task.vencFixo;                                // limite fixo (LLP)
-    const unit = BASE_UNIT[task.base] || 'h';
+    const unit = baseUnit(task.base) || 'h';
     const disp = (venc!=null && counter!=null) ? +(venc - counter).toFixed(1) : null; // DISP = VENC − contador
     r.num = { venc, disp, unit };
   }
@@ -68,17 +72,22 @@ function compute(task){
   return r;
 }
 
-// ---------- PERSISTÊNCIA ----------
-function saveLocal(){ try{ localStorage.setItem(LSKEY, JSON.stringify(stripState())); }catch(e){} }
-function loadLocal(){ try{ const s=localStorage.getItem(LSKEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
-function stripState(){ return { aeronave:STATE.aeronave, contadores:STATE.contadores, tarefas:STATE.tarefas, hoje:STATE.hoje, frota:STATE.frota }; }
+// ---------- PERSISTÊNCIA (multi-aeronave) ----------
+// STATE.acmaps = { 'PT-LJQ':{aeronave,contadores,tarefas,da}, ... }
+// STATE.contadores/tarefas apontam para a aeronave ativa (STATE.currentAC).
+function cur(){ return STATE.acmaps[STATE.currentAC]; }
+function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify({acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC})); }catch(e){} }
+function loadLocal(){ try{ const s=localStorage.getItem('jetfor_mapa_v2'); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function acDoc(ac){ return DB.collection(window.FIRESTORE_COLECAO||'mapas').doc(ac); }
 
 async function saveAll(){
   saveLocal();
-  if(ONLINE && DOCREF){
+  if(ONLINE && DB){
     try{
       SUPPRESS=true;
-      await DOCREF.set(Object.assign(stripState(),{updatedAt:new Date().toISOString()}));
+      const m=cur();
+      await acDoc(STATE.currentAC).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,updatedAt:new Date().toISOString()});
+      await acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,updatedAt:new Date().toISOString()});
       SUPPRESS=false;
       toast('✔ Salvo no Firebase (nuvem)');
     }catch(e){ SUPPRESS=false; toast('⚠ Erro ao salvar na nuvem — salvo local'); console.error(e); }
@@ -88,29 +97,37 @@ async function saveAll(){
 }
 
 // ---------- FIREBASE ----------
+let SNAP_UNSUB=null;
 function initFirebase(){
   const cfg = window.FIREBASE_CONFIG || {};
   if(!cfg.apiKey || !cfg.projectId){ setBadge(false); return; }
   try{
     firebase.initializeApp(cfg);
     DB = firebase.firestore();
-    DOCREF = DB.collection(window.FIRESTORE_COLECAO||'mapas').doc(window.FIRESTORE_DOC||'PT-LJQ');
     ONLINE = true; setBadge(true);
-    DOCREF.get().then(snap=>{
-      if(!snap.exists){ DOCREF.set(Object.assign(stripState(),{updatedAt:new Date().toISOString()})); }
-    });
-    DOCREF.onSnapshot(snap=>{
-      if(SUPPRESS) return;
-      const d=snap.data(); if(!d) return;
-      STATE.aeronave=d.aeronave||STATE.aeronave;
-      STATE.contadores=d.contadores||STATE.contadores;
-      STATE.tarefas=d.tarefas||STATE.tarefas;
-      if(d.frota) STATE.frota=d.frota;
-      if(d.hoje) STATE.hoje=d.hoje;
-      renderAll();
-      if($('#view-inicio').dataset.done) drawFleet();
-    });
+    // dados gerais (frota/hoje)
+    acDoc('_geral').get().then(snap=>{
+      if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,updatedAt:new Date().toISOString()}); }
+    }).catch(()=>{});
+    subscribeAC(STATE.currentAC);
   }catch(e){ console.error(e); ONLINE=false; setBadge(false); }
+}
+function subscribeAC(ac){
+  if(!ONLINE||!DB) return;
+  if(SNAP_UNSUB){ SNAP_UNSUB(); SNAP_UNSUB=null; }
+  acDoc(ac).get().then(snap=>{
+    if(!snap.exists){ const m=STATE.acmaps[ac]; acDoc(ac).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,updatedAt:new Date().toISOString()}); }
+  }).catch(()=>{});
+  SNAP_UNSUB=acDoc(ac).onSnapshot(snap=>{
+    if(SUPPRESS) return;
+    const d=snap.data(); if(!d) return;
+    const m=STATE.acmaps[ac];
+    if(d.contadores) m.contadores=d.contadores;
+    if(d.tarefas) m.tarefas=d.tarefas;
+    if(d.aeronave) m.aeronave=d.aeronave;
+    if(d.da) m.da=d.da;
+    if(ac===STATE.currentAC){ STATE.contadores=m.contadores; STATE.tarefas=m.tarefas; renderCounters(); renderTable(); }
+  });
 }
 function setBadge(on){
   const b=$('#connBadge');
@@ -118,21 +135,21 @@ function setBadge(on){
   else  { b.className='badge off'; b.textContent='● Local (sem nuvem)'; }
 }
 
-// ---------- CONTADORES (render) ----------
-const COUNTER_GROUPS = [
-  {key:'celula', dot:'#14284B', title:'Célula (Aeronave)',
-   fields:[['celula_horas','Horas'],['celula_pousos','Pousos'],['celula_ciclos','Ciclos']]},
-  {key:'motor1', dot:'#1c5bb8', title:'Motor 1 (LH)',
-   fields:[['motor1_horas','Horas'],['motor1_ciclos','Ciclos']], note:'motor1'},
-  {key:'motor2', dot:'#b8631c', title:'Motor 2 (RH)',
-   fields:[['motor2_horas','Horas'],['motor2_ciclos','Ciclos']], note:'motor2'},
-  {key:'helice', dot:'#6b3fa0', title:'Hélice',
-   fields:[['helice_horas','Horas']], note:'helice'},
-];
+// ---------- CONTADORES (render) — grupos derivados do cadastro (nº motores/hélices) ----------
+function buildCounterGroups(){
+  const ac = (cur()&&cur().aeronave)||{};
+  const nM = ac.nMotores!=null? ac.nMotores : 2;
+  const nH = ac.nHelices!=null? ac.nHelices : 0;
+  const groups=[{key:'celula',dot:'#14284B',title:'Célula (Aeronave)',fields:[['celula_horas','Horas'],['celula_pousos','Pousos'],['celula_ciclos','Ciclos']]}];
+  const mcols=['#1c5bb8','#b8631c','#2E7D32','#8a3ffa'];
+  for(let i=1;i<=nM;i++) groups.push({key:'motor'+i,dot:mcols[(i-1)%4],title:'Motor '+i,fields:[['motor'+i+'_horas','Horas'],['motor'+i+'_ciclos','Ciclos']]});
+  for(let i=1;i<=nH;i++) groups.push({key:'helice'+i,dot:'#6b3fa0',title:'Hélice '+i,fields:[['helice'+i+'_horas','Horas'],['helice'+i+'_ciclos','Ciclos']]});
+  return groups;
+}
 function renderCounters(){
   const g=$('#cgrid'); g.innerHTML='';
-  const info = STATE.contadoresInfo||{};
-  COUNTER_GROUPS.forEach(grp=>{
+  const info = {};
+  buildCounterGroups().forEach(grp=>{
     const div=document.createElement('div'); div.className='cgroup';
     let html=`<div class="ctitle"><span class="dot" style="background:${grp.dot}"></span>${grp.title}</div>`;
     grp.fields.forEach(([k,lab])=>{
@@ -216,7 +233,7 @@ function rowEl(t,c){
   tr.innerHTML =
     `<td>${esc(t.nome)}</td>`+
     `<td class="muted">${esc(t.pn||'')}</td>`+
-    `<td class="muted">${esc(t.sn||'')}</td>`+
+    `<td class="muted" title="${esc(t.sn||'')}">${esc(t.sn||'')}</td>`+
     `<td><span class="basetag ${baseTagClass(t.base)}">${BASE_LABEL[t.base]||t.base}</span></td>`+
     `<td class="num">${inter}</td>`+
     `<td class="num">${exec}</td>`+
@@ -281,18 +298,19 @@ function deleteTask(){
 
 // ---------- EXPORT / IMPORT ----------
 function exportJSON(){
-  const blob=new Blob([JSON.stringify(stripState(),null,1)],{type:'application/json'});
+  const data={acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC};
+  const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download='JetFor_Mapa_PT-LJQ.json'; a.click();
+  a.download='JetFor_Mapas.json'; a.click();
 }
 function importJSON(file){
   const rd=new FileReader();
   rd.onload=()=>{ try{ const d=JSON.parse(rd.result);
-    if(d.contadores) STATE.contadores=d.contadores;
-    if(d.tarefas) STATE.tarefas=d.tarefas;
-    if(d.aeronave) STATE.aeronave=d.aeronave;
+    if(d.acmaps){ STATE.acmaps=d.acmaps; STATE.currentAC=(d.currentAC&&d.acmaps[d.currentAC])?d.currentAC:Object.keys(d.acmaps)[0]; STATE.contadores=cur().contadores; STATE.tarefas=cur().tarefas; }
+    else { if(d.contadores) STATE.contadores=d.contadores; if(d.tarefas) STATE.tarefas=d.tarefas; }
+    if(d.frota) STATE.frota=d.frota;
     if(d.hoje) STATE.hoje=d.hoje;
-    renderAll(); saveAll(); toast('✔ Importado');
+    buildMapaSubtabs(); renderAll(); if($('#view-inicio').dataset.done) drawFleet(); saveAll(); toast('✔ Importado');
   }catch(e){ toast('Arquivo inválido'); } };
   rd.readAsText(file);
 }
@@ -392,8 +410,9 @@ function drawFleet(){
       <div class="row">${esc(f.obs)}</div>
       ${f.mapa?`<div class="verMapa" data-map="${i}">Ver mapa de manutenção →</div>`:`<div class="row" style="color:#b0b6c0">Mapa em breve</div>`}
     </div>`;}).join('')+`<button class="ac addac no-print" id="btnAddAc">＋<br>Adicionar aeronave</button>`;
-  $('#dashFleet').querySelectorAll('[data-map]').forEach(x=>x.addEventListener('click',e=>{e.stopPropagation();switchView('mapa');}));
-  $('#dashFleet').querySelectorAll('.ac.clik').forEach(card=>card.addEventListener('click',()=>switchView('mapa')));
+  const openFromCard=i=>{ const f=fleet[i]; if(f&&f.mapa) openMap(f.mapa); else switchView('mapa'); };
+  $('#dashFleet').querySelectorAll('[data-map]').forEach(x=>x.addEventListener('click',e=>{e.stopPropagation();openFromCard(+x.dataset.map);}));
+  $('#dashFleet').querySelectorAll('.ac.clik').forEach(card=>card.addEventListener('click',()=>openFromCard(+card.dataset.i)));
   $('#dashFleet').querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openAcModal(+b.dataset.edit);}));
   $('#dashFleet').querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();delAc(+b.dataset.del);}));
   $('#btnAddAc').addEventListener('click',()=>openAcModal(null));
@@ -470,9 +489,9 @@ function renderInicio(){
 
 // ---------- Sub-abas do MAPA: DA & Boletins (por aeronave) ----------
 function renderMapaSheet(k){
-  const DA=window.JETFOR_DA; if(!DA||!DA.sheets[k]) return;
+  const DA=cur().da; if(!DA||!DA.sheets[k]) return;
   const sh=DA.sheets[k];
-  let h=`<div class="panel"><h2><span class="tag">${esc(sh.title.split('—')[0].trim())}</span> ${esc(sh.title)} — PT-LJQ</h2><div class="pbody">`;
+  let h=`<div class="panel"><h2><span class="tag">${esc(sh.title.split('—')[0].trim())}</span> ${esc(sh.title)} — ${esc(STATE.currentAC)}</h2><div class="pbody">`;
   if(sh.stale) h+=`<div class="stale">⚠ Esta aba veio do Excel com dados de <b>outra aeronave</b> (template). Substituir pelos boletins reais do S550 quando disponíveis.</div>`;
   if(sh.info&&sh.info.length) h+=`<p class="lead" style="margin-bottom:8px">${sh.info.map(esc).join(' · ')}</p>`;
   h+=`<div class="tblwrap"><table class="da"><thead><tr>${DA.cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>`;
@@ -488,6 +507,28 @@ function selectMapaSubtab(k){
   if(k==='mapa'){ $('#mapa-main').style.display=''; $('#mapa-sheet').style.display='none'; }
   else { $('#mapa-main').style.display='none'; renderMapaSheet(k); $('#mapa-sheet').style.display=''; }
   window.scrollTo(0,0);
+}
+function buildMapaSubtabs(){
+  const da=cur().da||{sheets:{}}; const bar=$('#mapaSubtabs');
+  let h='<button class="subtab active" data-sheet="mapa">Mapa de Manutenção</button>';
+  Object.keys(da.sheets||{}).forEach(k=>{ h+=`<button class="subtab" data-sheet="${k}">${esc(da.sheets[k].title||k)}</button>`; });
+  bar.innerHTML=h;
+  bar.querySelectorAll('.subtab').forEach(b=>b.addEventListener('click',()=>selectMapaSubtab(b.dataset.sheet)));
+}
+// ---------- trocar de aeronave ----------
+function openMap(ac){
+  if(!ac || !STATE.acmaps[ac]){ switchView('mapa'); return; }
+  STATE.currentAC=ac;
+  const m=cur(); STATE.contadores=m.contadores; STATE.tarefas=m.tarefas;
+  const a=m.aeronave||{};
+  const label=`${a.matricula||ac} · ${a.modelo||''}${a.sn?' · S/N '+a.sn:''}`;
+  $('#acbadge').textContent='✈ '+label;
+  $('#acinfo').textContent=label+(a.ano?' · '+a.ano:'');
+  buildMapaSubtabs();
+  fillGroupFilters(); renderCounters(); renderTable();
+  selectMapaSubtab('mapa');
+  subscribeAC(ac);
+  switchView('mapa');
 }
 
 // ---------- FROTA: adicionar / editar / remover ----------
@@ -571,19 +612,26 @@ function switchView(v){
 }
 
 // ---------- boot ----------
+function clone(x){ return JSON.parse(JSON.stringify(x)); }
 function boot(){
   const seed = window.JETFOR_SEED;
   $('#logo').src = seed.logo;
   const local = loadLocal();
+  const acmaps = (local&&local.acmaps) || clone(window.JETFOR_ACMAPS||{});
+  const currentAC = (local&&local.currentAC && acmaps[local.currentAC]) ? local.currentAC : 'PT-LJQ';
   STATE = {
-    aeronave: seed.aeronave,
-    contadores: (local&&local.contadores) || seed.contadores,
-    contadoresInfo: seed.contadoresInfo,
-    tarefas: (local&&local.tarefas) || seed.tarefas,
+    acmaps: acmaps,
+    currentAC: currentAC,
+    contadores: acmaps[currentAC].contadores,
+    tarefas: acmaps[currentAC].tarefas,
     hoje: (local&&local.hoje) || todayISO(),
     frota: (local&&local.frota) || (window.JETFOR_DASH? window.JETFOR_DASH.fleet.map(x=>Object.assign({},x)) : [])
   };
-  $('#acinfo').textContent = `${seed.aeronave.matricula} · ${seed.aeronave.modelo} · S/N ${seed.aeronave.sn} · ${seed.aeronave.ano}`;
+  const a=acmaps[currentAC].aeronave||{};
+  const label=`${a.matricula||currentAC} · ${a.modelo||''}${a.sn?' · S/N '+a.sn:''}`;
+  $('#acinfo').textContent=label+(a.ano?' · '+a.ano:'');
+  if($('#acbadge')) $('#acbadge').textContent='✈ '+label;
+  buildMapaSubtabs();
   renderAll();
   renderInicio();   // página inicial (dashboard) é a padrão
   initFirebase();
@@ -604,7 +652,7 @@ function boot(){
   $('#overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
   document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
-  document.querySelectorAll('#mapaSubtabs .subtab').forEach(b=>b.addEventListener('click',()=>selectMapaSubtab(b.dataset.sheet)));
+  /* sub-abas do mapa são ligadas dinamicamente em buildMapaSubtabs() */
   $('#acOk').addEventListener('click',saveAcModal);
   $('#acCancel').addEventListener('click',closeAcModal);
   $('#acDelete').addEventListener('click',()=>{ if(acEditIdx!=null){ const i=acEditIdx; closeAcModal(); delAc(i); } });

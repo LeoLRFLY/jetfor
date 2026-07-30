@@ -9,8 +9,9 @@ continuada da frota. Substitui/complementa a planilha Excel de mapa de manutenç
 tornando-a **dinâmica** (recalcula sozinha), e reúne num só lugar: frota, obrigações
 normativas (SASC/PMAC), mapa dinâmico do PT-LJQ, diretrizes/boletins e formulários.
 
+- **Site publicado:** https://jetfor.vercel.app/ ✅ (no ar)
 - **Repositório GitHub:** `LeoLRFLY/jetfor` (branch `main`)
-- **Pasta local:** `~/Downloads/jetfor-mapa`
+- **Pasta local:** `/Users/leo/jet for/jetfor-mapa` (movida de `~/Downloads/jetfor-mapa`)
 - **Hospedagem:** Vercel (deploy automático a cada `git push`)
 - **Backend:** Firebase Firestore — projeto `jetfor-23189`, coleção `mapas`, doc `PT-LJQ`
 - **Tipo:** site estático (HTML/CSS/JS puro, sem build) + Firebase via CDN (compat SDK)
@@ -80,6 +81,33 @@ jetfor-mapa/
 - **Aeronave (frota):** `{ mat, modelo, fab, tcds, assentos, enq, sasc, obs, mapa }`
   - `sasc` é derivado do enquadramento: `135.411(a)(2)` ⇒ SASC; `(a)(1)` ⇒ não.
 
+## 5b. Modelo de dados das tarefas — REFORMULAÇÃO (em execução)
+
+Vale para TODAS as aeronaves (inclusive corrigir o PT-LJQ). Cada tarefa tem:
+
+- **Categoria:** `celula` · `motor` · `helice` · `ica` (ICA é categoria separada).
+- **Tipo de vencimento:** `horas` · `ciclos` · `pousos` · `calendario` (meses).
+- **Unidade** (p/ motor/hélice): a qual unidade se aplica (Motor 1/2, Hélice 1/2) ou "todas".
+
+Regras acordadas com o Leo:
+- **Cadastro da aeronave** ganha **nº de motores** e **nº de hélices**. Item de motor/hélice
+  **nasce multiplicado** por esse número (uma linha por unidade); depois o usuário pode
+  lançar/editar só em uma unidade ou em todas. Para as aeronaves atuais, **duplicar direto**.
+- **Trem de pouso, LLP (life limited), etc. → categoria Célula.**
+- **ICA → categoria separada** (aba/seção própria).
+- **Todos os itens de cada Excel entram** — nada descartado; validar contagem e VENC (0 diverg.).
+- No mapa: filtros por **Categoria** e por **Tipo de vencimento**; contadores por unidade.
+
+### Mapas de outras aeronaves (pasta `/Users/leo/jet for/`) — a importar
+| Aeronave | Modelo | S/N | Itens | Situação |
+|---|---|---|---|---|
+| PR-ARN | B200GT (turboélice, 2 mot + 2 hél) | BY-021 | ~205 | na frota (SASC) |
+| PR-FHN | Cessna Citation 550 | 550-0222 (1981) | ~163 (14 ICA) | = "Citation 550 (em inclusão)" |
+| PT-WHB | Hawker 400A (Beechjet) | RK-73 | ~259 | substitui o PR-AEX na frota |
+
+### Mapas FALTANDO (sem arquivo na pasta)
+- PR-LJA — Phenom 300 (Embraer) · PP-SCF — King Air C90 · PS-ALT — King Air C90A
+
 ## 6. Decisões técnicas/normativas importantes
 
 - **Classificação SASC pelo TCDS** (assentos certificados, excluindo piloto): 10+ ⇒
@@ -94,10 +122,8 @@ jetfor-mapa/
 
 ## 7. Estado do deploy
 
-- **GitHub:** repositório criado (`LeoLRFLY/jetfor`), 1º push feito no setup inicial.
-  As atualizações seguintes estão **gravadas na pasta local** e são publicadas com
-  `git add . && git commit && git push` (⚠️ confirmar se os pushes recentes foram feitos).
-- **Vercel:** importar/estar conectado ao repositório → deploy automático. *(confirmar URL)*
+- **GitHub:** `LeoLRFLY/jetfor` — todos os commits enviados (working tree limpo, 26 arquivos).
+- **Vercel:** ✅ **publicado e no ar em https://jetfor.vercel.app/** (deploy automático a cada push).
 - **Firebase:** `config.js` preenchido (jetfor-23189). **Pendente:** publicar as **regras do
   Firestore** (senão o banco bloqueia leitura/escrita) e confirmar que está salvando na nuvem.
 
@@ -128,6 +154,8 @@ jetfor-mapa/
 
 ## 11. Histórico de mudanças (changelog)
 
+- **30/07** — 🚀 **Site no ar: https://jetfor.vercel.app/** (deploy confirmado). Projeto movido
+  para `/Users/leo/jet for/jetfor-mapa`. Pendente só: regras do Firestore + validar salvamento.
 - **29/07 (2)** — **Correção normativa importante:** a ANAC (resposta Fala.BR, protocolo
   50001.154292/2026-13) confirmou que o **SDR/SACI foi descontinuado em 01/06/2023**; os
   reportes de dificuldade em serviço (RDS) e demais reportes de segurança operacional agora

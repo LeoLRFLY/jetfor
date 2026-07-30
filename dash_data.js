@@ -1,6 +1,6 @@
 window.JETFOR_DASH = {
  "fleet": [
-  {"mat":"PR-ARN","modelo":"Beechcraft B200GT","fab":"Beechcraft","tcds":"EM-8005-13","assentos":"10+ (confirmar)","enq":"135.411(a)(2)","sasc":true,"obs":"Entra no SASC/PMAC","mapa":null},
+  {"mat":"PR-ARN","modelo":"Beechcraft B200GT","fab":"Beechcraft","tcds":"EM-8005-13","assentos":"10+ (confirmar)","enq":"135.411(a)(2)","sasc":true,"obs":"Entra no SASC/PMAC · S/N BY-021","mapa":"PR-ARN"},
   {"mat":"(em inclusão)","modelo":"Cessna Citation 550","fab":"Cessna","tcds":"EM-8403-02","assentos":"10+ (confirmar)","enq":"135.411(a)(2)","sasc":true,"obs":"Em processo de inclusão","mapa":null},
   {"mat":"PT-LJQ","modelo":"Cessna Citation S550","fab":"Cessna","tcds":"EM-8403 (confirmar)","assentos":"10+ (confirmar)","enq":"135.411(a)(2)","sasc":true,"obs":"S/N S550-0113 · em inclusão no SASC","mapa":"PT-LJQ"},
   {"mat":"PR-LJA (confirmar)","modelo":"Embraer EMB-505 (Phenom 300)","fab":"Embraer","tcds":"EA-2009T12","assentos":"até 10 (tipo cert. 11 ocup.)","enq":"135.411(a)(2)","sasc":true,"obs":"SASC pela certificação de tipo (até 10 assentos pax)","mapa":null},
