@@ -602,7 +602,7 @@ function drawFleet(){
       <div class="row">${esc(f.obs)}</div>
       ${f.mapa?`<div class="verMapa" data-map="${i}">Ver mapa de manutenção →</div>`:`<div class="row" style="color:#b0b6c0">Mapa em breve</div>`}
     </div>`;}).join('')+`<button class="ac addac no-print" id="btnAddAc">＋<br>Adicionar aeronave</button>`;
-  const openFromCard=i=>{ const f=fleet[i]; if(f&&f.mapa) openMap(f.mapa); else switchView('mapa'); };
+  const openFromCard=i=>{ const f=fleet[i]; if(f&&f.mapa&&STATE.acmaps[f.mapa]) openMap(f.mapa); else toast('Mapa ainda não disponível para esta aeronave'); };
   $('#dashFleet').querySelectorAll('[data-map]').forEach(x=>x.addEventListener('click',e=>{e.stopPropagation();openFromCard(+x.dataset.map);}));
   $('#dashFleet').querySelectorAll('.ac.clik').forEach(card=>card.addEventListener('click',()=>openFromCard(+card.dataset.i)));
   $('#dashFleet').querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openAcModal(+b.dataset.edit);}));
@@ -736,7 +736,7 @@ function buildMapaSubtabs(){
 }
 // ---------- trocar de aeronave ----------
 function openMap(ac){
-  if(!ac || !STATE.acmaps[ac]){ switchView('mapa'); return; }
+  if(!ac || !STATE.acmaps[ac]){ toast('Mapa ainda não disponível para esta aeronave'); return; }
   STATE.currentAC=ac;
   const m=cur(); STATE.contadores=m.contadores; STATE.tarefas=m.tarefas;
   const a=m.aeronave||{};
@@ -837,6 +837,10 @@ function boot(){
   $('#logo').src = seed.logo;
   const local = loadLocal();
   const acmaps = (local&&local.acmaps) || clone(window.JETFOR_ACMAPS||{});
+  // merge: aeronaves novas do seed que ainda não estão salvas localmente entram sem apagar as existentes
+  if(local && local.acmaps && window.JETFOR_ACMAPS){
+    for(const k in window.JETFOR_ACMAPS){ if(!acmaps[k]) acmaps[k]=clone(window.JETFOR_ACMAPS[k]); }
+  }
   const currentAC = (local&&local.currentAC && acmaps[local.currentAC]) ? local.currentAC : 'PT-LJQ';
   STATE = {
     acmaps: acmaps,
