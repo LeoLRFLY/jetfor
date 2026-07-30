@@ -28,7 +28,7 @@ function baseUnit(base){
   return 'h';   // horas, TSN, TSO
 }
 const CAT_LABEL={celula:'Célula',motor:'Motor',helice:'Hélice',ica:'ICA'};
-const TIPO_LABEL={horas:'Horas',ciclos:'Ciclos',pousos:'Pousos',calendario:'Calendário',oc:'OC'};
+const TIPO_LABEL={horas:'Horas',ciclos:'Ciclos',pousos:'Pousos',calendario:'Calendário',oc:'OC',na:'N/A'};
 // limiar de "próximo do vencimento" por unidade
 const WARN = { h:50, pou:100, cic:100, dias:60 };
 
