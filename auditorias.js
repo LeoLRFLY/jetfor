@@ -70,7 +70,7 @@ function openOficinaModal(idx){
     <table class="ff"><tr><th>Razão social</th><td colspan="3"><input data-of="razao" value="${f('razao')}"></td></tr>
       <tr><th>CNPJ</th><td><input data-of="cnpj" value="${f('cnpj')}"></td><th>Certificação / CHE nº</th><td><input data-of="che" value="${f('che')}"></td></tr>
       <tr><th>Modelos atendidos</th><td><input data-of="modelos" value="${f('modelos')}"></td><th>Contato</th><td><input data-of="contato" value="${f('contato')}"></td></tr>
-      <tr><th>Data de envio do MGM</th><td colspan="3"><input data-of="dataEnvioMGM" value="${f('dataEnvioMGM')}" placeholder="aaaa-mm-dd"></td></tr>
+      <tr><th>Data de envio do MGM</th><td colspan="3"><input type="date" data-of="dataEnvioMGM" value="${f('dataEnvioMGM')}" style="width:170px"></td></tr>
     </table>`;
   $('#ofTitle').textContent = idx!=null ? 'Editar oficina' : 'Nova oficina';
   $('#ofOverlay').classList.add('show');
@@ -163,7 +163,7 @@ function auditDocHTML(d,o){
     <div class="fh"><div class="fh-l">${logoHtml}<span class="fh-emp">JETFOR TÁXI AÉREO · COA 2007-07-2CHQ-02-02 · CNPJ 01.274.847/0001-27 · Base Fortaleza/CE (TAG)</span></div>
       <div class="fh-r"><b>AUDITORIA INTERNA DE OFICINAS</b><div class="fh-min">Formulário F-SASC-02 · Rev. 00</div></div></div>
     <div class="fsec">1. Identificação da auditoria</div>
-    <table class="ff"><tr><th>Auditoria nº</th><td>${ai('numero',d.numero)}</td><th>Data</th><td>${ai('data',d.data,'placeholder="aaaa-mm-dd"')}</td></tr>
+    <table class="ff"><tr><th>Auditoria nº</th><td>${ai('numero',d.numero)}</td><th>Data</th><td><input type="date" data-af="data" value="${esc(d.data||'')}" style="width:160px"></td></tr>
       <tr><th>Tipo</th><td><select data-af="tipo"><option ${d.tipo==='Programada (anual)'?'selected':''}>Programada (anual)</option><option ${d.tipo==='Eventual / por evento'?'selected':''}>Eventual / por evento</option></select></td>
       <th>Auditor(es)</th><td>${ai('auditores',d.auditores)}</td></tr></table>
     <div class="fsec">2. Oficina / fornecedor auditado</div>

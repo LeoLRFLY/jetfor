@@ -14,16 +14,18 @@ const LSKEY = 'jetfor_mapa_PTLJQ';
 // ---------- unidades / rótulos ----------
 const BASE_LABEL = {
   celula_horas:'Célula · h', celula_pousos:'Célula · pousos', celula_ciclos:'Célula · ciclos',
-  motor1_horas:'Motor 1 · h', motor1_ciclos:'Motor 1 · ciclos', motor1_pousos:'Motor 1 · pousos',
-  motor2_horas:'Motor 2 · h', motor2_ciclos:'Motor 2 · ciclos', motor2_pousos:'Motor 2 · pousos',
-  helice1_horas:'Hélice 1 · h', helice2_horas:'Hélice 2 · h', helice1_ciclos:'Hélice 1 · cic', helice2_ciclos:'Hélice 2 · cic',
-  helice_horas:'Hélice · h', calendario:'Calendário'
+  motor1_tsn:'Motor 1 · TSN', motor1_tso:'Motor 1 · TSO', motor1_csn:'Motor 1 · CSN', motor1_cso:'Motor 1 · CSO',
+  motor2_tsn:'Motor 2 · TSN', motor2_tso:'Motor 2 · TSO', motor2_csn:'Motor 2 · CSN', motor2_cso:'Motor 2 · CSO',
+  helice1_tsn:'Hélice 1 · TSN', helice1_tso:'Hélice 1 · TSO', helice2_tsn:'Hélice 2 · TSN', helice2_tso:'Hélice 2 · TSO',
+  // legados (mantidos p/ compatibilidade de exibição)
+  motor1_horas:'Motor 1 · h', motor1_ciclos:'Motor 1 · ciclos', motor2_horas:'Motor 2 · h', motor2_ciclos:'Motor 2 · ciclos',
+  helice1_horas:'Hélice 1 · h', helice2_horas:'Hélice 2 · h', helice_horas:'Hélice · h', calendario:'Calendário'
 };
 function baseUnit(base){
   if(!base||base==='calendario') return '';
   if(base.endsWith('_pousos')) return 'pou';
-  if(base.endsWith('_ciclos')) return 'cic';
-  return 'h';
+  if(base.endsWith('_ciclos')||base.endsWith('_csn')||base.endsWith('_cso')) return 'cic';
+  return 'h';   // horas, TSN, TSO
 }
 const CAT_LABEL={celula:'Célula',motor:'Motor',helice:'Hélice',ica:'ICA'};
 const TIPO_LABEL={horas:'Horas',ciclos:'Ciclos',pousos:'Pousos',calendario:'Calendário'};
@@ -149,6 +151,7 @@ function subscribeAC(ac){
     if(d.osHistorico) m.osHistorico=d.osHistorico;
     if(d.docs) m.docs=d.docs;
     if(d.docCatsExtra) m.docCatsExtra=d.docCatsExtra;
+    migrateEngineCounters(m);
     if(ac===STATE.currentAC){ STATE.contadores=m.contadores; STATE.tarefas=m.tarefas; renderCounters(); renderTable(); }
   });
 }
@@ -159,14 +162,39 @@ function setBadge(on){
 }
 
 // ---------- CONTADORES (render) — grupos derivados do cadastro (nº motores/hélices) ----------
+// ---------- migração: motor TSN/TSO/CSN/CSO, hélice TSN/TSO ----------
+function remapEngineBase(base,t){
+  if(!base) return base;
+  const txt=(((t&&t.nome)||'')+' '+((t&&t.grupo)||'')).toUpperCase();
+  const ov=/OVERHAUL|\bHSI\b|HOT\s*SECTION|\bMINOR\b|\bMAJOR\b|\bTBO\b|REV\.?\s*GERAL|REVIS[ÃA]O\s*GERAL/.test(txt);
+  let m;
+  if((m=/^motor(\d+)_horas$/.exec(base))) return 'motor'+m[1]+'_'+(ov?'tso':'tsn');
+  if((m=/^motor(\d+)_ciclos$/.exec(base))) return 'motor'+m[1]+'_'+(ov?'cso':'csn');
+  if((m=/^motor(\d+)_pousos$/.exec(base))) return 'motor'+m[1]+'_tsn';
+  if((m=/^helice(\d+)_horas$/.exec(base))) return 'helice'+m[1]+'_'+(ov?'tso':'tsn');
+  if((m=/^helice(\d+)_ciclos$/.exec(base))) return 'helice'+m[1]+'_'+(ov?'tso':'tsn');
+  return base;
+}
+function migrateEngineCounters(m){
+  if(!m) return;
+  const c = m.contadores = m.contadores || {};
+  for(let i=1;i<=4;i++){
+    const mh=c['motor'+i+'_horas'], mc=c['motor'+i+'_ciclos'], hh=c['helice'+i+'_horas'];
+    if(mh!=null){ if(c['motor'+i+'_tsn']==null) c['motor'+i+'_tsn']=mh; if(c['motor'+i+'_tso']==null) c['motor'+i+'_tso']=mh; }
+    if(mc!=null){ if(c['motor'+i+'_csn']==null) c['motor'+i+'_csn']=mc; if(c['motor'+i+'_cso']==null) c['motor'+i+'_cso']=mc; }
+    if(hh!=null){ if(c['helice'+i+'_tsn']==null) c['helice'+i+'_tsn']=hh; if(c['helice'+i+'_tso']==null) c['helice'+i+'_tso']=hh; }
+  }
+  (m.tarefas||[]).forEach(t=>{ if(t && t.base) t.base=remapEngineBase(t.base,t); });
+}
+function migrateAllEngineCounters(){ Object.keys(STATE.acmaps||{}).forEach(k=>migrateEngineCounters(STATE.acmaps[k])); }
 function buildCounterGroups(){
   const ac = (cur()&&cur().aeronave)||{};
   const nM = ac.nMotores!=null? ac.nMotores : 2;
   const nH = ac.nHelices!=null? ac.nHelices : 0;
   const groups=[{key:'celula',dot:'#14284B',title:'Célula (Aeronave)',fields:[['celula_horas','Horas'],['celula_pousos','Pousos'],['celula_ciclos','Ciclos']]}];
   const mcols=['#1c5bb8','#b8631c','#2E7D32','#8a3ffa'];
-  for(let i=1;i<=nM;i++) groups.push({key:'motor'+i,dot:mcols[(i-1)%4],title:'Motor '+i,fields:[['motor'+i+'_horas','Horas'],['motor'+i+'_ciclos','Ciclos']]});
-  for(let i=1;i<=nH;i++) groups.push({key:'helice'+i,dot:'#6b3fa0',title:'Hélice '+i,fields:[['helice'+i+'_horas','Horas'],['helice'+i+'_ciclos','Ciclos']]});
+  for(let i=1;i<=nM;i++) groups.push({key:'motor'+i,dot:mcols[(i-1)%4],title:'Motor '+i,fields:[['motor'+i+'_tsn','TSN (h)'],['motor'+i+'_tso','TSO (h)'],['motor'+i+'_csn','CSN'],['motor'+i+'_cso','CSO']]});
+  for(let i=1;i<=nH;i++) groups.push({key:'helice'+i,dot:'#6b3fa0',title:'Hélice '+i,fields:[['helice'+i+'_tsn','TSN (h)'],['helice'+i+'_tso','TSO (h)']]});
   return groups;
 }
 function renderCounters(){
@@ -257,7 +285,7 @@ function openBaixa(){
   });
   $('#baixaBody').innerHTML=`
     <p class="lead"><b>${ids.length}</b> tarefa(s) selecionada(s). Informe a data e as leituras dos contadores no momento da execução — cada tarefa recebe a leitura correspondente à sua base e o VENC/DISP é recalculado.</p>
-    <table class="ff"><tr><th>Data da execução</th><td><input id="bxData" value="${hoje}" placeholder="aaaa-mm-dd" style="width:130px"></td>
+    <table class="ff"><tr><th>Data da execução</th><td><input type="date" id="bxData" value="${hoje}" style="width:150px"></td>
       <th>Oficina executante</th><td><input id="bxRef" placeholder="Ex.: USA - Uirapuru (vai p/ Observações)"></td></tr></table>
     <div class="fsec">Leituras dos contadores na execução</div>
     <div class="bxgrid">${rd}</div>`;
@@ -308,8 +336,9 @@ function osBuildFromSelection(){
     servicos:items.map(t=>esc0(t.nome)+(t.pn?' — P/N '+t.pn:'')+(t.sn?' · S/N '+t.sn:'')),
     execNum:'', execData:''
   };
-  for(let i=1;i<=nM;i++) d.mot.push({pn:'',sn:'',tsn:g(C['motor'+i+'_horas']),tso:'',csn:g(C['motor'+i+'_ciclos']),cso:''});
-  for(let i=1;i<=nH;i++) d.hel.push({pn:'',sn:'',tsn:g(C['helice'+i+'_horas']),tso:''});
+  const cv=k=>C[k]!=null?C[k]:null;
+  for(let i=1;i<=nM;i++) d.mot.push({pn:'',sn:'',tsn:g(cv('motor'+i+'_tsn')!=null?cv('motor'+i+'_tsn'):cv('motor'+i+'_horas')),tso:g(cv('motor'+i+'_tso')),csn:g(cv('motor'+i+'_csn')!=null?cv('motor'+i+'_csn'):cv('motor'+i+'_ciclos')),cso:g(cv('motor'+i+'_cso'))});
+  for(let i=1;i<=nH;i++) d.hel.push({pn:'',sn:'',tsn:g(cv('helice'+i+'_tsn')!=null?cv('helice'+i+'_tsn'):cv('helice'+i+'_horas')),tso:g(cv('helice'+i+'_tso'))});
   return d;
 }
 function esc0(s){ return s==null?'':String(s); }
@@ -933,6 +962,8 @@ function boot(){
     docCatsGeral: (local&&local.docCatsGeral) || [],
     oficinas: (local&&local.oficinas) || []
   };
+  migrateAllEngineCounters();
+  STATE.contadores=STATE.acmaps[currentAC].contadores; STATE.tarefas=STATE.acmaps[currentAC].tarefas;
   const a=acmaps[currentAC].aeronave||{};
   const label=`${a.matricula||currentAC} · ${a.modelo||''}${a.sn?' · S/N '+a.sn:''}`;
   $('#acinfo').textContent=label+(a.ano?' · '+a.ano:'');
