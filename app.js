@@ -892,8 +892,8 @@ function renderMapaSheet(k){
   sh.rows=(sh.rows||[]).map(daRowNormalize);
   let h=`<div class="panel"><h2><span class="tag">${esc((sh.title||'DA').split('—')[0].trim())}</span> ${esc(sh.title||'DA')} — ${esc(STATE.currentAC)}</h2><div class="pbody">`;
   if(sh.stale) h+=`<div class="stale">⚠ Esta aba veio do Excel como template (dados de outra aeronave). Edite/limpe conforme as DAs reais.</div>`;
-  h+=`<button class="btn g sm no-print" id="daNew" style="margin-bottom:10px">➕ Nova DA</button>`;
-  h+=`<div class="tblwrap"><table class="da"><thead><tr><th>#</th><th>Nº / DA</th><th>Sinopse</th><th>BS / Método</th><th>Cat</th><th>Tipo</th><th class="num">Freq.</th><th class="num">Vence</th><th class="num">Restante</th><th>Cumprido</th><th>Obs</th><th class="no-print">Ações</th></tr></thead><tbody>`;
+  h+=`<button class="btn g sm no-print" id="daNew" style="margin-bottom:10px">➕ Nova DA</button> <button class="btn o sm no-print" id="daLimpar" style="margin-bottom:10px">🧹 Limpar rodapés do template</button>`;
+  h+=`<div class="tblwrap"><table class="da"><thead><tr><th>#</th><th>Nº / DA</th><th>Sinopse</th><th>Cat</th><th>R. Primário / Situação</th><th>Tipo</th><th class="num">Freq.</th><th class="num">Vence</th><th class="num">Restante</th><th>Cumprido</th><th>Cad/Pág</th><th class="no-print">Ações</th></tr></thead><tbody>`;
   let nr=0;
   sh.rows.forEach((r,idx)=>{
     if(r.sec!==undefined){ h+=`<tr class="dasec"><td colspan="12">${esc(r.sec)} <button class="btn o sm no-print dasecdel" data-i="${idx}" title="remover seção">🗑</button></td></tr>`; return; }
@@ -905,11 +905,12 @@ function renderMapaSheet(k){
       if(c.num){ const u=c.num.unit; if(r.intervalo!=null) freq=fmtN(r.intervalo,0)+' '+u; if(c.num.venc!=null) venc=fmtN(c.num.venc,1)+' '+u; if(c.num.disp!=null) disp=`<span class="${c.num.disp<0?'disp-neg':''}">${fmtN(c.num.disp,1)} ${u}</span>`; }
       if(c.cal){ const dd=c.cal.disp; const cs=`${fmtDate(c.cal.venc)} <span class="${dd!=null&&dd<0?'disp-neg':''}">(${dd!=null?dd+'d':'—'})</span>`; venc=(venc==='—')?cs:(venc+' · '+cs); if(freq==='—'&&r.cal) freq=r.cal.meses+'m'; }
     } else { freq=r.freq||'única'; venc=r.venc||'—'; disp=r.disp||'—'; }
-    h+=`<tr class="darow" data-i="${idx}" style="cursor:pointer"><td class="nrcol">${nr}</td><td><b>${esc(r.numero||'—')}</b></td><td>${esc(r.sinopse||'')}</td><td>${esc(r.bs||'')}</td><td>${esc(r.cat||'')}</td><td>${tipo==='repetitiva'?'🔁 Repet.':'Única'}</td><td class="num">${freq}</td><td class="num">${venc}</td><td class="num">${disp}</td><td>${esc(r.cumprido||'')} ${fadtsOf(r).map(fd=>`<a href="${esc(fd.url)}" target="_blank" rel="noopener" title="${esc(fd.nome)}" onclick="event.stopPropagation()">📎</a>`).join(' ')}</td><td class="obscell">${esc(r.obs||'')}</td><td class="no-print"><button class="btn o sm" data-daedit="${idx}">✎</button> <button class="btn o sm" data-dadel="${idx}">🗑</button></td></tr>`;
+    h+=`<tr class="darow" data-i="${idx}" style="cursor:pointer"><td class="nrcol">${nr}</td><td><b>${esc(r.numero||'—')}</b></td><td>${esc(r.sinopse||'')}</td><td>${esc(r.cat||'')}</td><td class="obscell">${esc(r.rprimario||'')}</td><td>${tipo==='repetitiva'?'🔁 Repet.':'Única'}</td><td class="num">${freq}</td><td class="num">${venc}</td><td class="num">${disp}</td><td>${esc(r.cumprido||'')} ${fadtsOf(r).map(fd=>`<a href="${esc(fd.url)}" target="_blank" rel="noopener" title="${esc(fd.nome)}" onclick="event.stopPropagation()">📎</a>`).join(' ')}</td><td class="obscell">${esc(r.cadpag||'')}</td><td class="no-print"><button class="btn o sm" data-daedit="${idx}">✎</button> <button class="btn o sm" data-dadel="${idx}">🗑</button></td></tr>`;
   });
   h+=`</tbody></table></div></div></div>`;
   $('#mapa-sheet').innerHTML=h;
   $('#daNew').addEventListener('click',()=>openDA(k,null));
+  const dl=$('#daLimpar'); if(dl) dl.addEventListener('click',()=>limparRodapes(k));
   $('#mapa-sheet').querySelectorAll('[data-daedit]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openDA(k,+b.dataset.daedit);}));
   $('#mapa-sheet').querySelectorAll('[data-dadel]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();deleteDA(k,+b.dataset.dadel);}));
   $('#mapa-sheet').querySelectorAll('.darow').forEach(r=>r.addEventListener('click',()=>openDA(k,+r.dataset.i)));
@@ -939,6 +940,14 @@ function openDA(k,idx){
     <div class="fld"><label>Cumprido</label><input id="da_cumpr" value="${v('cumprido')}" placeholder="Sim / Não / N/A"></div>
     <div class="fld"><label>R. Primário / ref.</label><input id="da_rprim" value="${v('rprimario')}"></div>
     <div class="fld"><label>Cad/Pág (FCDA)</label><input id="da_cad" value="${v('cadpag')}"></div>
+    <div class="fld"><label>TSN</label><input id="da_tsn" value="${v('tsn')}"></div>
+    <div class="fld"><label>TSO</label><input id="da_tso" value="${v('tso')}"></div>
+    <div class="fld full" id="da_impGroup" style="display:${tipo==='repetitiva'?'none':''}"><label style="font-size:11px;color:#8a94a6">Campos importados do Excel (texto) — usados quando a DA é Única</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:4px">
+        <input id="da_freqt" placeholder="Freq." value="${v('freq')}">
+        <input id="da_venct" placeholder="Vence" value="${v('venc')}">
+        <input id="da_dispt" placeholder="Restante/Situação" value="${v('disp')}">
+      </div></div>
     <div class="fld full"><label>FADT / anexos (comprovantes)</label>
       <div id="da_fadtCur">${fadtsOf(r).length?fadtsOf(r).map((fd,i)=>`<div>📎 <a href="${esc(fd.url)}" target="_blank" rel="noopener">${esc(fd.nome)}</a> <button type="button" class="btn o sm fadtRm" data-i="${i}">remover</button></div>`).join(''):'<span class="muted">nenhum anexo</span>'}</div>
       <input type="file" id="da_fadt" class="no-print" multiple style="margin-top:5px">
@@ -948,7 +957,8 @@ function openDA(k,idx){
   $('#daTitle').textContent = idx!=null ? ('DA '+(r.numero||'')) : 'Nova DA';
   $('#daBody').querySelectorAll('.fadtRm').forEach(btn=>btn.addEventListener('click',()=>{ DAFADT.removed.add(+btn.dataset.i); btn.parentElement.style.opacity='.4'; btn.parentElement.querySelector('a').style.textDecoration='line-through'; btn.disabled=true; }));
   const toggleRep=()=>{ const rep=$('#da_tipo').value==='repetitiva';
-    ['da_base','da_int','da_exec','da_calm','da_cale'].forEach(id=>{ const fld=$('#'+id).closest('.fld'); if(fld) fld.style.display=rep?'':'none'; }); };
+    ['da_base','da_int','da_exec','da_calm','da_cale'].forEach(id=>{ const fld=$('#'+id).closest('.fld'); if(fld) fld.style.display=rep?'':'none'; });
+    const ig=$('#da_impGroup'); if(ig) ig.style.display=rep?'none':''; };
   $('#da_tipo').addEventListener('change',toggleRep); toggleRep();
   $('#daOverlay').classList.add('show');
 }
@@ -957,10 +967,13 @@ async function saveDA(){
   const g=id=>{const e=$('#'+id);return e?e.value.trim():'';};
   const tipo=$('#da_tipo').value;
   const row={ numero:g('da_num'), cat:g('da_cat'), sinopse:g('da_sin'), bs:g('da_bs'), tipo,
-    data:g('da_data'), cumprido:g('da_cumpr'), rprimario:g('da_rprim'), cadpag:g('da_cad'), obs:g('da_obs') };
+    data:g('da_data'), cumprido:g('da_cumpr'), rprimario:g('da_rprim'), cadpag:g('da_cad'),
+    tsn:g('da_tsn'), tso:g('da_tso'), obs:g('da_obs') };
   if(tipo==='repetitiva'){
     row.base=$('#da_base').value; row.intervalo=num(g('da_int')); row.exec=num(g('da_exec'));
     const cm=num(g('da_calm')), ce=g('da_cale'); if(cm!=null&&ce) row.cal={meses:cm,exec:ce};
+  } else {
+    row.freq=g('da_freqt'); row.venc=g('da_venct'); row.disp=g('da_dispt');
   }
   if(!row.numero && !row.sinopse){ toast('Informe o nº ou a sinopse da DA'); return; }
   // anexos: mantém os existentes não-removidos + novos (em massa)
@@ -974,6 +987,22 @@ async function saveDA(){
 }
 function closeDA(){ $('#daOverlay').classList.remove('show'); DACTX.idx=-1; }
 function deleteDA(k,idx){ const sh=cur().da.sheets[k]; if(!sh) return; if(!confirm('Excluir esta DA?')) return; sh.rows.splice(idx,1); saveAll(); renderMapaSheet(k); toast('🗑 DA excluída'); }
+const DA_RODAPE_RX=/TERRAL\s*T[ÁA]XI|FORTALEZA\s*-?\s*CE|LEONARDO\s+FILIPE|N[ÃA]O\s+EXISTEM\s+CF|^\s*CF\s*N|CANAC\b|ASS\.?\s*:/i;
+function daIsRodape(r){
+  if(r.sec!==undefined) return DA_RODAPE_RX.test(r.sec||'');
+  const t=((r.numero||'')+' '+(r.sinopse||'')+' '+(r.rprimario||'')+' '+(r.cumprido||'')+' '+(r.cadpag||''));
+  if(DA_RODAPE_RX.test(t)) return true;
+  if(!(r.numero||'').trim() && !(r.sinopse||'').trim() && !(r.rprimario||'').trim() && !(r.cadpag||'').trim() && !r.base) return true;
+  return false;
+}
+function limparRodapes(k){
+  const sh=cur().da.sheets[k]; if(!sh) return; sh.rows=(sh.rows||[]).map(daRowNormalize);
+  const n=sh.rows.filter(daIsRodape).length;
+  if(!n){ toast('Nenhum rodapé/linha-template pra limpar nesta aba'); return; }
+  if(!confirm('Remover '+n+' linha(s) de rodapé/template (assinaturas, empresa, "não existem CF" etc.)? As DAs de verdade permanecem.')) return;
+  sh.rows=sh.rows.filter(r=>!daIsRodape(r));
+  saveAll(); renderMapaSheet(k); toast('🧹 '+n+' linha(s) removida(s)');
+}
 function renderICA(){
   const ica=(STATE.tarefas||[]).filter(t=>t.categoria==='ica');
   let h=`<div class="panel"><h2><span class="tag">ICA</span> ICA / Grandes Modificações — ${esc(STATE.currentAC)}</h2><div class="pbody">`;
