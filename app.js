@@ -76,7 +76,7 @@ function compute(task){
 // STATE.acmaps = { 'PT-LJQ':{aeronave,contadores,tarefas,da}, ... }
 // STATE.contadores/tarefas apontam para a aeronave ativa (STATE.currentAC).
 function cur(){ return STATE.acmaps[STATE.currentAC]; }
-function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify({acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC})); }catch(e){} }
+function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify({acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC,osProx:STATE.osProx})); }catch(e){} }
 function loadLocal(){ try{ const s=localStorage.getItem('jetfor_mapa_v2'); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function acDoc(ac){ return DB.collection(window.FIRESTORE_COLECAO||'mapas').doc(ac); }
 
@@ -86,8 +86,8 @@ async function saveAll(){
     try{
       SUPPRESS=true;
       const m=cur();
-      await acDoc(STATE.currentAC).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,updatedAt:new Date().toISOString()});
-      await acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,updatedAt:new Date().toISOString()});
+      await acDoc(STATE.currentAC).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),updatedAt:new Date().toISOString()});
+      await acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),updatedAt:new Date().toISOString()});
       SUPPRESS=false;
       toast('✔ Salvo no Firebase (nuvem)');
     }catch(e){ SUPPRESS=false; toast('⚠ Erro ao salvar na nuvem — salvo local'); console.error(e); }
@@ -107,7 +107,8 @@ function initFirebase(){
     ONLINE = true; setBadge(true);
     // dados gerais (frota/hoje)
     acDoc('_geral').get().then(snap=>{
-      if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,updatedAt:new Date().toISOString()}); }
+      if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),updatedAt:new Date().toISOString()}); }
+      else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; }
     }).catch(()=>{});
     subscribeAC(STATE.currentAC);
   }catch(e){ console.error(e); ONLINE=false; setBadge(false); }
@@ -126,6 +127,7 @@ function subscribeAC(ac){
     if(d.tarefas) m.tarefas=d.tarefas;
     if(d.aeronave) m.aeronave=d.aeronave;
     if(d.da) m.da=d.da;
+    if(d.osHistorico) m.osHistorico=d.osHistorico;
     if(ac===STATE.currentAC){ STATE.contadores=m.contadores; STATE.tarefas=m.tarefas; renderCounters(); renderTable(); }
   });
 }
@@ -220,30 +222,68 @@ function updateOSsel(){
   $('#osCount').textContent=n;
   b.style.display = n>0 ? '' : 'none';
 }
+function osNextLabel(){
+  const y=(STATE.hoje||todayISO()).slice(0,4);
+  const map=STATE.osProx||{}; const n=map[y]!=null?map[y]:(y==='2026'?10:1);
+  return {y,n,label:String(n).padStart(3,'0')+'/'+y};
+}
 function gerarOS(){
-  const ids=selectedIds(); if(!ids.length) return;
-  const m=cur(); const a=m.aeronave||{};
+  const ids=selectedIds(); if(!ids.length){ toast('Selecione itens'); return; }
+  const m=cur(); const a=m.aeronave||{}; const C=m.contadores||{};
   const items=ids.map(id=>m.tarefas.find(t=>t.id===id)).filter(Boolean);
-  const linhas=items.map((t,i)=>{
-    const c=compute(t);
-    const venc=c.num&&c.num.venc!=null?fmtN(c.num.venc,1)+' '+(c.num.unit||''):(c.cal?fmtDate(c.cal.venc):'—');
-    const disp=c.num&&c.num.disp!=null?fmtN(c.num.disp,1)+' '+(c.num.unit||''):(c.cal&&c.cal.disp!=null?c.cal.disp+'d':'—');
-    return `<tr><td>${i+1}</td><td>${esc(t.nome)}</td><td>${esc(t.pn||'')}</td><td>${esc(t.sn||'')}</td><td>${esc(BASE_LABEL[t.base]||t.base)}</td><td>${venc}</td><td>${disp}</td><td style="width:120px"></td></tr>`;
-  }).join('');
-  const hoje=new Date(STATE.hoje||todayISO()).toLocaleDateString('pt-BR');
+  const os=osNextLabel();
+  const hoje=new Date((STATE.hoje||todayISO())+'T00:00:00').toLocaleDateString('pt-BR');
+  const g=v=>v!=null?fmtN(v,1):'';
+  const nM=a.nMotores!=null?a.nMotores:2, nH=a.nHelices!=null?a.nHelices:0;
+  let util=`<tr><th>AERONAVE</th><td colspan="2">TSN: ${g(C.celula_horas)}</td><td colspan="2">TSO: —</td><td>CSN: ${g(C.celula_ciclos)}</td><td>CSO: —</td></tr>`;
+  for(let i=1;i<=nM;i++) util+=`<tr><th>Motor ${i}</th><td>P/N <input></td><td>S/N <input></td><td>TSN: ${g(C['motor'+i+'_horas'])}</td><td>TSO <input style="width:70px"></td><td>CSN: ${g(C['motor'+i+'_ciclos'])}</td><td>CSO <input style="width:70px"></td></tr>`;
+  for(let i=1;i<=nH;i++) util+=`<tr><th>Hélice ${i}</th><td>P/N <input></td><td>S/N <input></td><td>TSN: ${g(C['helice'+i+'_horas'])}</td><td>TSO <input style="width:70px"></td><td colspan="2">—</td></tr>`;
+  const servicos=items.map((t,i)=>`<div class="ossvc"><b>${i+1})</b> ${esc(t.nome)}${t.pn?' — P/N '+esc(t.pn):''}${t.sn?' · S/N '+esc(t.sn):''}</div>`).join('');
   $('#osBody').innerHTML=`
     <div class="osdoc">
       <div class="fh"><div class="fh-l"><span class="fh-jf">✈ JETFOR</span><span class="fh-emp">JETFOR TÁXI AÉREO LTDA. · COA 2007-07-2CHQ-02-02</span></div>
-        <div class="fh-r"><b>ORDEM DE SERVIÇO</b><br><span class="fh-min">Nº _______ · Data ${hoje}</span></div></div>
-      <table class="ff"><tr><th>Aeronave</th><td>${esc(a.matricula||STATE.currentAC)}</td><th>Modelo</th><td>${esc(a.modelo||'')}</td><th>S/N</th><td>${esc(a.sn||'')}</td></tr>
-        <tr><th>Oficina executante (RBAC 145)</th><td colspan="5"><input></td></tr></table>
-      <div class="fsec">Itens a executar (${items.length})</div>
-      <table class="ff grid"><tr><th>#</th><th>Nomenclatura</th><th>P/N</th><th>S/N</th><th>Base</th><th>Vence</th><th>Restante</th><th>Executado / Rubrica</th></tr>${linhas}</table>
-      <div class="fsign"><div class="fsign-line">_______________________________________</div>Diretor de Manutenção — Leonardo Filipe de Araujo · Cód. ANAC 133125
-        <div class="floc">Local e data: Fortaleza, ______ de ________________ de ________.</div></div>
+        <div class="fh-r"><b>ORDEM DE SERVIÇO</b></div></div>
+      <table class="ff"><tr><th>Matrícula</th><td>${esc(a.matricula||STATE.currentAC)}</td><th>Nº de Série</th><td>${esc(a.sn||'')}</td>
+        <th>O.S. Nº</th><td><input id="osNum" value="${os.label}" style="width:90px"></td><th>Data de Abertura</th><td>${hoje}</td></tr>
+        <tr><th>Oficina executora (RBAC 145)</th><td colspan="7"><input placeholder="Ex.: USA - Uirapuru Serviços Aeronáuticos Ltda"></td></tr></table>
+      <div class="fsec">Registro de Utilização</div>
+      <table class="ff util">${util}</table>
+      <div class="fsec">Solicitação — Serviços a executar (${items.length})</div>
+      <div class="ossvcs">${servicos}</div>
+      <table class="ff"><tr><th>Diretor de Manutenção</th><td>Leonardo Filipe de Araujo</td><th>CANAC/CREA</th><td>CREA 1713750589</td><th>Assinatura</th><td></td></tr></table>
+      <div class="fsec">Execução</div>
+      <table class="ff"><tr><th>Nº da O.S.</th><td><input></td><th>Data de Encerramento</th><td><input placeholder="__/__/____"></td></tr></table>
+      <div class="osdecl"><b>DECLARAÇÃO DE LIBERAÇÃO PARA RETORNO AO SERVIÇO</b><br>
+        Declaro que os serviços acima foram executados de acordo com as instruções técnicas e a legislação vigente. Os itens em ACR (se houver) foram transferidos para nova Ordem de Serviço. O(s) produto(s) aeronáutico(s) afetado(s) por esta Ordem de Serviço está(ão) aeronavegável(is) e autorizado(s) para retorno ao serviço.</div>
+      <div class="fsign"><div class="fsign-line">_______________________________________</div>Responsável: Leonardo Filipe de Araujo · CREA 1713750589</div>
     </div>`;
-  $('#osOverlay').classList.add('show');
-  document.body.classList.add('osopen');
+  $('#osOverlay').classList.add('show'); document.body.classList.add('osopen');
+}
+function registrarOS(){
+  const m=cur(); const os=osNextLabel();
+  const numEl=$('#osNum'); const numero=numEl?numEl.value.trim():os.label;
+  const ids=selectedIds(); const items=ids.map(id=>m.tarefas.find(t=>t.id===id)).filter(Boolean);
+  if(!m.osHistorico) m.osHistorico=[];
+  m.osHistorico.push({numero, data:(STATE.hoje||todayISO()), itens:items.map(t=>t.nome), qtd:items.length});
+  // incrementa sequência do ano
+  const y=(STATE.hoje||todayISO()).slice(0,4);
+  STATE.osProx=STATE.osProx||{}; STATE.osProx[y]=(STATE.osProx[y]!=null?STATE.osProx[y]:(y==='2026'?10:1))+1;
+  saveAll(); toast('✔ O.S. '+numero+' registrada no histórico');
+  $('#osOverlay').classList.remove('show'); document.body.classList.remove('osopen');
+}
+function renderHistoricoOS(){
+  const h0=(cur().osHistorico)||[];
+  let h=`<div class="panel"><h2><span class="tag">O.S.</span> Histórico de Ordens de Serviço — ${esc(STATE.currentAC)}</h2><div class="pbody">`;
+  const prox=osNextLabel().label;
+  h+=`<p class="lead">Próxima O.S. a emitir: <b>${prox}</b>. Ao registrar uma O.S., a numeração avança sozinha.</p>`;
+  if(!h0.length){ h+='<p class="lead">Nenhuma O.S. registrada ainda para esta aeronave.</p>'; }
+  else{
+    h+=`<div class="tblwrap"><table class="da"><thead><tr><th>O.S. Nº</th><th>Data</th><th class="num">Itens</th><th>Serviços</th></tr></thead><tbody>`;
+    h0.slice().reverse().forEach(o=>{ h+=`<tr><td><b>${esc(o.numero)}</b></td><td>${fmtDate(new Date((o.data||'')+'T00:00:00'))}</td><td class="num">${o.qtd||(o.itens?o.itens.length:0)}</td><td class="obscell">${esc((o.itens||[]).join(' · '))}</td></tr>`; });
+    h+=`</tbody></table></div>`;
+  }
+  h+=`</div></div>`;
+  $('#mapa-sheet').innerHTML=h;
 }
 function baseTagClass(base){
   if(base&&base.startsWith('motor1')) return 'm1';
@@ -569,6 +609,7 @@ function selectMapaSubtab(k){
   document.querySelectorAll('#mapaSubtabs .subtab').forEach(b=>b.classList.toggle('active',b.dataset.sheet===k));
   if(k==='mapa'){ $('#mapa-main').style.display=''; $('#mapa-sheet').style.display='none'; }
   else if(k==='ica'){ $('#mapa-main').style.display='none'; renderICA(); $('#mapa-sheet').style.display=''; }
+  else if(k==='hist'){ $('#mapa-main').style.display='none'; renderHistoricoOS(); $('#mapa-sheet').style.display=''; }
   else { $('#mapa-main').style.display='none'; renderMapaSheet(k); $('#mapa-sheet').style.display=''; }
   window.scrollTo(0,0);
 }
@@ -578,6 +619,7 @@ function buildMapaSubtabs(){
   const temICA=(cur().tarefas||[]).some(t=>t.categoria==='ica');
   if(temICA) h+='<button class="subtab" data-sheet="ica">ICA / Grandes Modificações</button>';
   Object.keys(da.sheets||{}).forEach(k=>{ h+=`<button class="subtab" data-sheet="${k}">${esc(da.sheets[k].title||k)}</button>`; });
+  h+='<button class="subtab" data-sheet="hist">Histórico de O.S.</button>';
   bar.innerHTML=h;
   bar.querySelectorAll('.subtab').forEach(b=>b.addEventListener('click',()=>selectMapaSubtab(b.dataset.sheet)));
 }
@@ -691,7 +733,8 @@ function boot(){
     contadores: acmaps[currentAC].contadores,
     tarefas: acmaps[currentAC].tarefas,
     hoje: (local&&local.hoje) || todayISO(),
-    frota: (local&&local.frota) || (window.JETFOR_DASH? window.JETFOR_DASH.fleet.map(x=>Object.assign({},x)) : [])
+    frota: (local&&local.frota) || (window.JETFOR_DASH? window.JETFOR_DASH.fleet.map(x=>Object.assign({},x)) : []),
+    osProx: (local&&local.osProx) || {}
   };
   const a=acmaps[currentAC].aeronave||{};
   const label=`${a.matricula||currentAC} · ${a.modelo||''}${a.sn?' · S/N '+a.sn:''}`;
@@ -716,6 +759,7 @@ function boot(){
   $('#chkAll').addEventListener('change',e=>{ document.querySelectorAll('#tbl .rowchk').forEach(cb=>cb.checked=e.target.checked); updateOSsel(); });
   $('#btnOS').addEventListener('click',gerarOS);
   $('#osClose').addEventListener('click',()=>{ $('#osOverlay').classList.remove('show'); document.body.classList.remove('osopen'); });
+  $('#osReg').addEventListener('click',registrarOS);
   $('#osOverlay').addEventListener('click',e=>{ if(e.target.id==='osOverlay'){ $('#osOverlay').classList.remove('show'); document.body.classList.remove('osopen'); } });
   $('#btnImport').addEventListener('click',()=>$('#fileImport').click());
   $('#fileImport').addEventListener('change',e=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=''; });
