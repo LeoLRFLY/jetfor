@@ -346,6 +346,26 @@
   .docrow.muted{border-style:dashed;color:#9aa2ad;background:#fafbfc;font-style:italic}
   .docrow .docmove{font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;max-width:150px}
   .doccat h3 .catdel{padding:0 7px;margin-left:6px}
+  /* ---- oficinas & auditorias ---- */
+  .ofgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+  .ofcard{background:#fff;border:1px solid var(--line);border-left:5px solid var(--navy2);border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .ofcard-top{display:flex;justify-content:space-between;align-items:flex-start}
+  .ofrz{font-weight:800;font-size:15px;color:var(--navy)}
+  .ofcard .badge.r{background:#b3261e}.ofcard .badge.w{background:#b45309}
+  .auddoc .reqcell{text-align:left;font-size:10.5px}
+  .auddoc table.auditchk th,.auddoc table.auditchk td{font-size:10.5px;padding:4px 6px}
+  .auddoc select{border:1px solid var(--line);border-radius:5px;padding:4px 6px;font-size:11px;width:100%}
+  .auddoc textarea.fta{width:100%;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px;resize:vertical}
+  @media print{
+    body.audopen > *:not(#audOverlay){display:none!important}
+    body.audopen #audOverlay{position:static;background:#fff;display:block;overflow:visible;padding:0}
+    body.audopen #audOverlay .mfoot, body.audopen #audOverlay h3{display:none}
+    body.audopen #audOverlay .modal{box-shadow:none;width:100%;max-width:100%;border-radius:0}
+    body.audopen #audOverlay .mbody{display:block;padding:0;overflow:visible;max-height:none}
+    body.audopen .auddoc{font-size:10px}
+    body.audopen .auddoc table tr{break-inside:avoid;page-break-inside:avoid}
+    body.audopen .fsec{break-inside:avoid;break-after:avoid}
+  }
 </style>
 </head>
 <body>
@@ -369,11 +389,13 @@
   <button class="navbtn" data-view="mapa">🛠 Mapa de Manutenção</button>
   <button class="navbtn" data-view="obrig">📋 Obrigações MGM (SASC / PMAC)</button>
   <button class="navbtn" data-view="forms">📝 Formulários</button>
+  <button class="navbtn" data-view="oficinas">🏭 Oficinas &amp; Auditorias</button>
   <button class="navbtn" data-view="geral">📁 Pasta Geral</button>
 </nav>
 
 <div class="wrap" id="view-inicio"></div>
 <div class="wrap" id="view-geral" style="display:none"></div>
+<div class="wrap" id="view-oficinas" style="display:none"></div>
 
 <div class="wrap" id="view-mapa" style="display:none">
 
@@ -525,6 +547,24 @@
       <div><button class="btn o" id="osClose">Fechar</button><button class="btn o" id="osDel" style="display:none">🗑 Excluir</button><button class="btn p" onclick="window.print()">🖨 Imprimir / PDF</button><button class="btn g" id="osReg">✔ Registrar no histórico</button></div></div>
   </div>
 </div>
+<!-- OFICINA (cadastro) -->
+<div class="overlay" id="ofOverlay">
+  <div class="modal" style="width:720px;max-width:100%">
+    <h3 id="ofTitle">Nova oficina</h3>
+    <div class="mbody" style="display:block" id="ofBody"></div>
+    <div class="mfoot"><span class="muted" style="font-size:11px">Dados da oficina/fornecedor RBAC 145 contratado.</span>
+      <div><button class="btn o" id="ofCancel">Cancelar</button><button class="btn g" id="ofOk">Salvar oficina</button></div></div>
+  </div>
+</div>
+<!-- AUDITORIA (F-SASC-02) -->
+<div class="overlay" id="audOverlay">
+  <div class="modal" style="width:900px;max-width:100%">
+    <h3 id="audTitle">Nova auditoria</h3>
+    <div class="mbody" style="display:block" id="audBody"></div>
+    <div class="mfoot"><span class="muted" style="font-size:11px">Formulário F-SASC-02. Preencha, salve no histórico da oficina e imprima/gere PDF.</span>
+      <div><button class="btn o" id="audClose">Fechar</button><button class="btn p" onclick="window.print()">🖨 Imprimir / PDF</button><button class="btn g" id="audSave">✔ Salvar auditoria</button></div></div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <!-- Firebase (compat) -->
@@ -541,6 +581,7 @@
 <script src="forms.js"></script>
 <script src="app.js"></script>
 <script src="docs.js"></script>
+<script src="auditorias.js"></script>
 <script>
   if('serviceWorker' in navigator){
     window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));

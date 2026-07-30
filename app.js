@@ -76,7 +76,7 @@ function compute(task){
 // STATE.acmaps = { 'PT-LJQ':{aeronave,contadores,tarefas,da}, ... }
 // STATE.contadores/tarefas apontam para a aeronave ativa (STATE.currentAC).
 function cur(){ return STATE.acmaps[STATE.currentAC]; }
-function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify({acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC,osProx:STATE.osProx,docsGeral:STATE.docsGeral,docCatsGeral:STATE.docCatsGeral})); }catch(e){} }
+function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify({acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC,osProx:STATE.osProx,docsGeral:STATE.docsGeral,docCatsGeral:STATE.docCatsGeral,oficinas:STATE.oficinas})); }catch(e){} }
 function loadLocal(){ try{ const s=localStorage.getItem('jetfor_mapa_v2'); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function acDoc(ac){ return DB.collection(window.FIRESTORE_COLECAO||'mapas').doc(ac); }
 
@@ -88,6 +88,7 @@ async function saveAll(){
       const m=cur();
       await acDoc(STATE.currentAC).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),docs:(m.docs||[]),docCatsExtra:(m.docCatsExtra||[]),updatedAt:new Date().toISOString()});
       await acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),docCatsGeral:(STATE.docCatsGeral||[]),updatedAt:new Date().toISOString()});
+      await acDoc('_oficinas').set({oficinas:(STATE.oficinas||[]),updatedAt:new Date().toISOString()});
       SUPPRESS=false;
       toast('✔ Salvo no Firebase (nuvem)');
     }catch(e){ SUPPRESS=false; toast('⚠ Erro ao salvar na nuvem — salvo local'); console.error(e); }
@@ -109,6 +110,9 @@ function initFirebase(){
     acDoc('_geral').get().then(snap=>{
       if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),updatedAt:new Date().toISOString()}); }
       else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; if(d.docsGeral) STATE.docsGeral=d.docsGeral; if(d.docCatsGeral) STATE.docCatsGeral=d.docCatsGeral; if(d.frota){ STATE.frota=d.frota; if($('#view-inicio').dataset.done) drawFleet(); } }
+    }).catch(()=>{});
+    acDoc('_oficinas').get().then(snap=>{
+      if(snap.exists){ const d=snap.data()||{}; if(d.oficinas){ STATE.oficinas=d.oficinas; if($('#view-oficinas').style.display!=='none') renderOficinas(); } }
     }).catch(()=>{});
     initStorage();
     seedAllAC();
@@ -830,10 +834,12 @@ function switchView(v){
   $('#view-obrig').style.display = v==='obrig'?'':'none';
   $('#view-forms').style.display = v==='forms'?'':'none';
   $('#view-geral').style.display = v==='geral'?'':'none';
+  $('#view-oficinas').style.display = v==='oficinas'?'':'none';
   if(v==='inicio') renderInicio();
   if(v==='obrig') renderObrig();
   if(v==='forms') renderForms();
   if(v==='geral') renderDocsGeral();
+  if(v==='oficinas') renderOficinas();
   window.scrollTo(0,0);
 }
 
@@ -858,7 +864,8 @@ function boot(){
     frota: (local&&local.frota) || (window.JETFOR_DASH? window.JETFOR_DASH.fleet.map(x=>Object.assign({},x)) : []),
     osProx: (local&&local.osProx) || {},
     docsGeral: (local&&local.docsGeral) || [],
-    docCatsGeral: (local&&local.docCatsGeral) || []
+    docCatsGeral: (local&&local.docCatsGeral) || [],
+    oficinas: (local&&local.oficinas) || []
   };
   const a=acmaps[currentAC].aeronave||{};
   const label=`${a.matricula||currentAC} · ${a.modelo||''}${a.sn?' · S/N '+a.sn:''}`;
@@ -886,6 +893,12 @@ function boot(){
   $('#osReg').addEventListener('click',osRegDispatch);
   $('#osDel').addEventListener('click',()=>{ if(OSCTX.mode==='edit') excluirOS(OSCTX.idx); });
   $('#osOverlay').addEventListener('click',e=>{ if(e.target.id==='osOverlay') osClose(); });
+  $('#ofOk').addEventListener('click',saveOficina);
+  $('#ofCancel').addEventListener('click',closeOfModal);
+  $('#ofOverlay').addEventListener('click',e=>{ if(e.target.id==='ofOverlay') closeOfModal(); });
+  $('#audSave').addEventListener('click',salvarAuditoria);
+  $('#audClose').addEventListener('click',closeAud);
+  $('#audOverlay').addEventListener('click',e=>{ if(e.target.id==='audOverlay') closeAud(); });
   $('#btnImport').addEventListener('click',()=>$('#fileImport').click());
   $('#fileImport').addEventListener('change',e=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=''; });
   $('#overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
