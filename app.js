@@ -538,6 +538,13 @@ function baseTagClass(base){
   if(base==='calendario') return 'cal';
   return '';
 }
+// rótulo do tipo/base — nunca mostra "null": item sem base vira N/A (ou OC)
+function tipoTag(t){
+  if(t.base && BASE_LABEL[t.base]) return {cls:baseTagClass(t.base), txt:BASE_LABEL[t.base]};
+  if(t.base) return {cls:baseTagClass(t.base), txt:t.base};
+  if(t.tipoVenc==='oc') return {cls:'na', txt:'OC'};
+  return {cls:'na', txt:'N/A'};
+}
 function rowEl(t,c,n){
   const tr=document.createElement('tr'); tr.className=c.status;
   const unit = c.num? c.num.unit : '';
@@ -562,7 +569,7 @@ function rowEl(t,c,n){
     `<td>${esc(t.nome)}</td>`+
     `<td class="muted">${esc(t.pn||'')}</td>`+
     `<td class="muted" title="${esc(t.sn||'')}">${esc(t.sn||'')}</td>`+
-    `<td><span class="basetag ${baseTagClass(t.base)}">${BASE_LABEL[t.base]||t.base}</span></td>`+
+    `<td><span class="basetag ${tipoTag(t).cls}">${tipoTag(t).txt}</span></td>`+
     `<td class="num">${inter}</td>`+
     `<td class="num">${exec}</td>`+
     `<td class="num">${venc}</td>`+
@@ -585,7 +592,7 @@ function openTaskHist(id){
   const h=(t.hist||[]).slice().reverse();
   const ultExec = t.exec!=null ? (fmtN(t.exec,1)+' '+unitForBase(t.base)) : (t.cal&&t.cal.exec ? fmtDate(new Date(t.cal.exec+'T00:00:00')) : '—');
   let body=`<div class="fsec">${esc(t.nome)}</div>`;
-  body+=`<p class="lead"><b>Grupo:</b> ${esc(t.grupo||'—')} · <b>Base:</b> ${esc(BASE_LABEL[t.base]||t.base)} · <b>Intervalo:</b> ${t.intervalo!=null?fmtN(t.intervalo,0)+' '+unitForBase(t.base):(t.vencFixo!=null?'fixo':'—')}<br>
+  body+=`<p class="lead"><b>Grupo:</b> ${esc(t.grupo||'—')} · <b>Base:</b> ${esc(BASE_LABEL[t.base]||t.base||'N/A')} · <b>Intervalo:</b> ${t.intervalo!=null?fmtN(t.intervalo,0)+' '+unitForBase(t.base):(t.vencFixo!=null?'fixo':'—')}<br>
     <b>Última execução:</b> ${ultExec} · <b>Observação atual (oficina):</b> ${esc(t.obs||'—')}</p>`;
   if(!h.length){ body+=`<p class="lead muted">Nenhum cumprimento registrado ainda. Selecione a tarefa e use <b>Dar baixa</b> para registrar a execução, oficina e leitura.</p>`; }
   else{
@@ -1085,7 +1092,7 @@ function renderICA(){
     const inter=t.intervalo!=null?fmtN(t.intervalo,0)+(t.tipoVenc==='calendario'?'M':' '+unit):'—';
     const pill=`<span class="pill ${c.status}">${c.status==='od'?'VENCIDO':c.status==='wn'?'PRÓXIMO':'EM DIA'}</span>`;
     h+=`<tr class="${c.status}"><td class="nrcol">${i+1}</td><td>${esc(t.nome)}</td><td class="muted">${esc(t.pn||'')}</td>`+
-       `<td><span class="basetag ${t.tipoVenc==='calendario'?'cal':''}">${TIPO_LABEL[t.tipoVenc]||t.tipoVenc}</span></td>`+
+       `<td><span class="basetag ${t.tipoVenc==='calendario'?'cal':(t.tipoVenc==='na'||!t.tipoVenc?'na':'')}">${TIPO_LABEL[t.tipoVenc]||'N/A'}</span></td>`+
        `<td class="num">${inter}</td><td class="num">${venc}</td><td class="num">${disp}</td><td>${cal}</td>`+
        `<td class="obscell">${t.obs?esc(t.obs):'<span class=muted>—</span>'}</td><td>${pill}</td>`+
        `<td class="act no-print"><button class="btn o sm" data-edit="${esc(t.id)}">✎</button></td></tr>`;
