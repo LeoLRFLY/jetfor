@@ -510,13 +510,20 @@
       <div class="fld"><label>S/N</label><input id="f_sn"></div>
       <div class="fld full"><button type="button" class="btn o sm" id="f_troca">🔧 Registrar troca de peça</button>
         <span class="hint">Grava a troca no histórico e zera o intervalo a partir da nova leitura.</span></div>
-      <div class="fld full" style="border-top:1px dashed var(--line);padding-top:10px"><label>Intervalo (calculadora)</label></div>
-      <div class="fld"><label>Valor</label><input id="f_intervalo" type="number" step="any"></div>
-      <div class="fld"><label>Unidade</label><select id="f_unit"></select></div>
-      <div class="fld"><label>Última execução (leitura)</label><input id="f_exec" type="number" step="any"></div>
-      <div class="fld"><label>VENC fixo (LLP, opcional)</label><input id="f_vencfixo" type="number" step="any"></div>
-      <div class="fld"><label>Co-limite — Meses (opcional)</label><input id="f_calmeses" type="number" step="1"></div>
-      <div class="fld"><label>Data da última execução (calendário)</label><input id="f_calexec" type="date"></div>
+      <div class="fld full" style="border-top:1px dashed var(--line);padding-top:10px"><label>Tipo de controle</label>
+        <select id="f_tipoControle">
+          <option value="venc">Vencimento — controla por horas/ciclos/pousos/calendário</option>
+          <option value="na">N/A — não aplicável (sem vencimento)</option>
+          <option value="oc">OC — sob condição (sem vencimento)</option>
+        </select>
+        <span class="hint">N/A ou OC: a tarefa fica no mapa sem cálculo de vencimento. Dá pra desfazer voltando pra "Vencimento".</span></div>
+      <div class="fld full calcfld" style="border-top:1px dashed var(--line);padding-top:10px"><label>Intervalo (calculadora)</label></div>
+      <div class="fld calcfld"><label>Valor</label><input id="f_intervalo" type="number" step="any"></div>
+      <div class="fld calcfld"><label>Unidade</label><select id="f_unit"></select></div>
+      <div class="fld calcfld"><label>Última execução (leitura)</label><input id="f_exec" type="number" step="any"></div>
+      <div class="fld calcfld"><label>VENC fixo (LLP, opcional)</label><input id="f_vencfixo" type="number" step="any"></div>
+      <div class="fld calcfld"><label>Co-limite — Meses (opcional)</label><input id="f_calmeses" type="number" step="1"></div>
+      <div class="fld calcfld"><label>Data da última execução (calendário)</label><input id="f_calexec" type="date"></div>
       <div class="fld full"><label>Observações</label><textarea id="f_obs"></textarea></div>
     </div>
     <div class="mfoot">

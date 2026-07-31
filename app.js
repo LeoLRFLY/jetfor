@@ -642,6 +642,21 @@ function catUnitOptions(cat){
   return [['horas','FH · Horas'],['ciclos','FC · Ciclos'],['pousos','Pousos'],['','— só calendário']];
 }
 function deriveBase(cat,unit,idx){ if(!unit) return 'calendario'; if(cat==='celula') return 'celula_'+unit; return cat+idx+'_'+unit; }
+// tipoVenc a partir da base (para o modo Vencimento)
+function deriveTipoVenc(base){
+  if(!base) return null;
+  if(base==='calendario') return 'calendario';
+  const suf=base.split('_').pop();
+  if(suf==='pousos') return 'pousos';
+  if(suf==='ciclos'||suf==='csn'||suf==='cso') return 'ciclos';
+  return 'horas';
+}
+// mostra/oculta a calculadora conforme N/A / OC
+function onTipoControleChange(){
+  const modo=$('#f_tipoControle')?$('#f_tipoControle').value:'venc';
+  const off = (modo==='na'||modo==='oc');
+  document.querySelectorAll('#mbody .calcfld').forEach(el=>{ el.style.display = off?'none':''; });
+}
 function parseBaseToCatUnit(base){
   let m;
   if(!base||base==='calendario') return {cat:'celula',unit:'',idx:1};
@@ -688,6 +703,7 @@ function openModal(id){
   $('#f_vencfixo').value=t.vencFixo!=null?t.vencFixo:'';
   $('#f_calmeses').value=t.cal&&t.cal.meses!=null?t.cal.meses:''; $('#f_calexec').value=t.cal&&t.cal.exec?t.cal.exec:'';
   $('#f_obs').value=t.obs||'';
+  if($('#f_tipoControle')){ $('#f_tipoControle').value = (t.tipoVenc==='na')?'na':(t.tipoVenc==='oc'?'oc':'venc'); onTipoControleChange(); }
   $('#btnDelete').style.display=id?'inline-block':'none';
   $('#f_troca').style.display=id?'':'none';
   $('#overlay').classList.add('show');
@@ -697,21 +713,26 @@ function saveModal(){
   const nome=$('#f_nome').value.trim(); if(!nome){ toast('Informe a nomenclatura'); return; }
   const cat=$('#f_cat').value, unit=$('#f_unit').value;
   const cm=num($('#f_calmeses').value), ce=$('#f_calexec').value;
+  const modo=$('#f_tipoControle')?$('#f_tipoControle').value:'venc';
+  const naoc=(modo==='na'||modo==='oc');
   const common={ nome, grupo:($('#f_grupo').value.trim()||'Diversos'), categoria:cat, unidade:null,
     peca:$('#f_peca').value.trim(), fabricante:$('#f_fab').value.trim(),
     pn:$('#f_pn').value.trim(), sn:$('#f_sn').value.trim(),
-    intervalo:num($('#f_intervalo').value), exec:num($('#f_exec').value), vencFixo:num($('#f_vencfixo').value),
+    intervalo: naoc?null:num($('#f_intervalo').value), exec: naoc?null:num($('#f_exec').value), vencFixo: naoc?null:num($('#f_vencfixo').value),
     obs:$('#f_obs').value.trim() };
-  if(cm!=null&&ce) common.cal={meses:cm,exec:ce};
+  if(!naoc && cm!=null&&ce) common.cal={meses:cm,exec:ce};
   let idxs=[1];
   if(cat==='motor'||cat==='helice'){ idxs=[...document.querySelectorAll('#f_units .unitchk:checked')].map(c=>+c.value); if(!idxs.length){ toast('Selecione ao menos uma unidade (Motor/Hélice)'); return; } }
+  function baseFor(idx){ return naoc? null : deriveBase(cat,unit,idx); }
+  function tvFor(b){ return naoc? modo : deriveTipoVenc(b); }
   if(editingId){
     const i=STATE.tarefas.findIndex(x=>x.id===editingId); const old=STATE.tarefas[i]||{};
-    const rec=Object.assign({},old,common,{base:deriveBase(cat,unit,cat==='celula'?1:idxs[0])});
-    if(!common.cal) delete rec.cal;
+    const b=baseFor(cat==='celula'?1:idxs[0]);
+    const rec=Object.assign({},old,common,{base:b,tipoVenc:tvFor(b)});
+    if(naoc||!common.cal) delete rec.cal;
     STATE.tarefas[i]=rec;
   } else {
-    idxs.forEach((idx,k)=>{ STATE.tarefas.push(Object.assign({},common,{id:'t'+Date.now().toString(36)+k+Math.floor(Math.random()*1e3).toString(36),base:deriveBase(cat,unit,idx)})); });
+    idxs.forEach((idx,k)=>{ const b=baseFor(idx); STATE.tarefas.push(Object.assign({},common,{id:'t'+Date.now().toString(36)+k+Math.floor(Math.random()*1e3).toString(36),base:b,tipoVenc:tvFor(b)})); });
   }
   closeModal(); fillGroupFilters(); renderTable(); saveAll();
 }
@@ -1276,6 +1297,7 @@ function boot(){
   $('#histClose').addEventListener('click',closeHist);
   $('#histOverlay').addEventListener('click',e=>{ if(e.target.id==='histOverlay') closeHist(); });
   $('#f_cat').addEventListener('change',onCatChange);
+  if($('#f_tipoControle')) $('#f_tipoControle').addEventListener('change',onTipoControleChange);
   $('#f_grupoNew').addEventListener('click',e=>{ e.preventDefault(); novoGrupo(); });
   $('#f_troca').addEventListener('click',registrarTroca);
   $('#daOk').addEventListener('click',saveDA);
