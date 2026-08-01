@@ -64,6 +64,11 @@
             display:flex;align-items:center;gap:8px}
   .panel h2 .tag{background:var(--gold);color:#fff;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700}
   .pbody{padding:14px 16px}
+  .cthead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .cthead-r{display:inline-flex;align-items:center;gap:10px}
+  .ctresumo{display:none;font-size:12px;font-weight:700;color:var(--navy2)}
+  #counters.collapsed .pbody{display:none}
+  #counters.collapsed .ctresumo{display:inline}
   /* ---- counters ---- */
   .cgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
   .cgroup{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--zebra)}
@@ -454,7 +459,8 @@
 
   <!-- COUNTERS -->
   <div class="panel" id="counters">
-    <h2><span class="tag">CONTADORES</span> Atualize aqui e o mapa recalcula sozinho</h2>
+    <h2 class="cthead"><span><span class="tag">CONTADORES</span> Atualize aqui e o mapa recalcula sozinho</span>
+      <span class="cthead-r"><span class="ctresumo" id="ctResumo"></span><button class="btn o sm no-print" id="ctToggle" title="recolher/expandir">▾ recolher</button></span></h2>
     <div class="pbody">
       <div class="cgrid" id="cgrid"></div>
       <div class="cfield" style="margin-top:12px;max-width:260px">
