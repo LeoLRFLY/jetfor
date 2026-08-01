@@ -52,6 +52,7 @@ async function uploadDoc(scope, file, categoria, meta){
     const rec = { id:docNewId(), nome:file.name, categoria:categoria||'Outros',
       tamanho:file.size, tipo:file.type||'', url:url, path:path,
       rev:(meta&&meta.rev)||'', validade:(meta&&meta.validade)||'',
+      acs:(meta&&Array.isArray(meta.acs))?meta.acs:[],
       enviadoEm:(STATE.hoje||todayISO()) };
     docList(scope).push(rec);
     saveAll();
@@ -104,6 +105,11 @@ function renderDocs(scope){
       <button class="btn g sm" id="docUp">⬆ Enviar documento</button>
       <button class="btn o sm" id="docNewCat">➕ Nova pasta</button>
     </div>`;
+  if(isGeral){
+    h += `<div class="docacs no-print"><span class="muted">Vincular à(s) aeronave(s) — opcional (aparece também na pasta da aeronave):</span><div class="docacs-row">`+
+      acDocsList().map(m=>`<label class="docac"><input type="checkbox" class="docacchk" value="${esc(m)}"> ${esc(m)}</label>`).join('')+
+      `</div></div>`;
+  }
   const custom = customCats(scope);
   cats.forEach(cat=>{
     const items = list.filter(d=>d.categoria===cat);
@@ -116,12 +122,34 @@ function renderDocs(scope){
         ${d.rev?`<span class="badge n">rev ${esc(d.rev)}</span>`:''}
         ${d.validade?`<span class="badge n" style="background:#b45309">val ${esc(d.validade)}</span>`:''}
         <span class="muted">${fmtMB(d.tamanho)}</span>
+        ${isGeral?`<span class="docchips">${docAcsChips(d)}</span> <button class="btn o sm docacsedit no-print" data-id="${esc(d.id)}" title="vincular aeronaves">✈ aeronaves</button>`:''}
         <select class="docmove no-print" data-id="${esc(d.id)}" title="mover de pasta">${cats.map(c=>`<option ${c===d.categoria?'selected':''}>${esc(c)}</option>`).join('')}</select>
         <button class="btn o sm docdel no-print" data-id="${esc(d.id)}" title="excluir">🗑</button>
       </div>`;
+      if(isGeral){
+        h += `<div class="docacs-edit no-print" id="acsedit-${esc(d.id)}" style="display:none">`+
+          acDocsList().map(m=>`<label class="docac"><input type="checkbox" class="docaced" data-id="${esc(d.id)}" value="${esc(m)}" ${(Array.isArray(d.acs)&&d.acs.indexOf(m)>=0)?'checked':''}> ${esc(m)}</label>`).join('')+
+          `</div>`;
+      }
     });
     h += `</div>`;
   });
+  // Na pasta de uma aeronave: mostra os documentos da Pasta Geral vinculados a ela
+  if(!isGeral){
+    const vinc = geralVinculadosAC(scope);
+    h += `<div class="doccat"><h3><span>📎 Da Pasta Geral (vinculados a esta aeronave)</span><span class="muted">(${vinc.length})</span></h3>`;
+    if(!vinc.length){ h += `<div class="docrow muted">— nenhum documento da pasta geral vinculado —</div>`; }
+    else vinc.forEach(d=>{
+      h += `<div class="docrow">
+        <a href="${esc(d.url)}" target="_blank" rel="noopener">${docIcon(d.tipo,d.nome)} ${esc(d.nome)}</a>
+        ${d.rev?`<span class="badge n">rev ${esc(d.rev)}</span>`:''}
+        ${d.validade?`<span class="badge n" style="background:#b45309">val ${esc(d.validade)}</span>`:''}
+        <span class="muted">${fmtMB(d.tamanho)}</span>
+        <span class="badge n" style="background:#5a6785">Pasta Geral</span>
+      </div>`;
+    });
+    h += `</div>`;
+  }
   h += `</div></div>`;
   const target = isGeral ? $('#view-geral') : $('#mapa-sheet');
   target.innerHTML = h;
@@ -133,12 +161,18 @@ function renderDocs(scope){
     const cat = target.querySelector('#docCat').value;
     const rev = target.querySelector('#docRev').value.trim();
     const val = target.querySelector('#docVal').value.trim();
+    const acs = [...target.querySelectorAll('.docacchk:checked')].map(c=>c.value);
     up.disabled=true; let ok=0;
-    for(const f of files){ const r = await uploadDoc(scope, f, cat, {rev,validade:val}); if(r) ok++; }
+    for(const f of files){ const r = await uploadDoc(scope, f, cat, {rev,validade:val,acs}); if(r) ok++; }
     up.disabled=false;
     if(files.length>1) toast('✔ '+ok+'/'+files.length+' documentos enviados');
     if(ok) renderDocs(scope);
   });
+  target.querySelectorAll('.docacsedit').forEach(b=>b.addEventListener('click',()=>{
+    const el=target.querySelector('#acsedit-'+CSS.escape(b.dataset.id));
+    if(el) el.style.display = el.style.display==='none'?'flex':'none';
+  }));
+  target.querySelectorAll('.docaced').forEach(c=>c.addEventListener('change',()=>toggleDocAc(c.dataset.id, c.value)));
   target.querySelectorAll('.docdel').forEach(b=>b.addEventListener('click',()=>excluirDoc(scope, b.dataset.id)));
   const nc = target.querySelector('#docNewCat');
   if(nc) nc.addEventListener('click',()=>addDocCat(scope));
@@ -148,6 +182,24 @@ function renderDocs(scope){
 function moveDoc(scope, id, novaCat){
   const d = docList(scope).find(x=>x.id===id); if(!d) return;
   d.categoria = novaCat; saveAll(); renderDocs(scope);
+}
+
+// ---- vínculo de documentos da Pasta Geral com aeronaves ----
+function acDocsList(){
+  const fromFrota = (STATE.frota&&STATE.frota.length)? STATE.frota.map(f=>f.mat).filter(Boolean) : [];
+  const fromMaps = Object.keys(STATE.acmaps||{});
+  return [...new Set(fromFrota.concat(fromMaps))];
+}
+function geralVinculadosAC(mat){ return (STATE.docsGeral||[]).filter(d=>Array.isArray(d.acs)&&d.acs.indexOf(mat)>=0); }
+function toggleDocAc(id, mat){
+  const d=(STATE.docsGeral||[]).find(x=>x.id===id); if(!d) return;
+  d.acs = Array.isArray(d.acs)?d.acs:[];
+  const i=d.acs.indexOf(mat); if(i>=0) d.acs.splice(i,1); else d.acs.push(mat);
+  saveAll(); renderDocs('geral');
+}
+function docAcsChips(d){
+  const acs=Array.isArray(d.acs)?d.acs:[];
+  return acs.length? acs.map(m=>`<span class="acchip">✈ ${esc(m)}</span>`).join('') : '<span class="muted" style="font-size:11px">sem aeronave</span>';
 }
 
 function renderDocsGeral(){ renderDocs('geral'); }
