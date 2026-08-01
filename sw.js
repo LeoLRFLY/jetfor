@@ -1,5 +1,5 @@
 /* JetFor · Controle de Manutenção — Service Worker (PWA) */
-const CACHE = 'jetfor-mnt-v31';
+const CACHE = 'jetfor-mnt-v32';
 const SHELL = [
   './', './index.html', './app.js', './config.js', './data.js',
   './freq_data.js', './dash_data.js', './da_data.js', './acmaps_data.js', './patch_data.js', './reclass_data.js', './full_data.js', './iio_data.js', './forms.js', './docs.js', './auditorias.js',
