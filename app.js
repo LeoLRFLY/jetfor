@@ -113,7 +113,7 @@ function initFirebase(){
     // dados gerais (frota/hoje)
     acDoc('_geral').get().then(snap=>{
       if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),updatedAt:new Date().toISOString()}); }
-      else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; if(d.docsGeral) STATE.docsGeral=d.docsGeral; if(d.docCatsGeral) STATE.docCatsGeral=d.docCatsGeral; if(d.frota){ STATE.frota=d.frota; if($('#view-inicio').dataset.done) drawFleet(); } }
+      else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; if(d.docsGeral) STATE.docsGeral=d.docsGeral; if(d.docCatsGeral) STATE.docCatsGeral=d.docCatsGeral; if(d.frota){ STATE.frota=d.frota; if($('#view-inicio').dataset.done) drawFleet(); } if($('#view-geral') && $('#view-geral').style.display!=='none') renderDocsGeral(); }
     }).catch(()=>{});
     acDoc('_oficinas').get().then(snap=>{
       if(snap.exists){ const d=snap.data()||{}; if(d.oficinas){ STATE.oficinas=d.oficinas; if($('#view-oficinas').style.display!=='none') renderOficinas(); } }

@@ -104,6 +104,7 @@ function renderDocs(scope){
       <input id="docVal" placeholder="Validade (opc.)" style="width:120px">
       <button class="btn g sm" id="docUp">⬆ Enviar documento</button>
       <button class="btn o sm" id="docNewCat">➕ Nova pasta</button>
+      ${isGeral?'<button class="btn o sm" id="docSync" title="Recupera arquivos que estão no Storage mas não aparecem aqui">🔄 Sincronizar com o Storage</button>':''}
     </div>`;
   if(isGeral){
     h += `<div class="docacs no-print"><span class="muted">Vincular à(s) aeronave(s) — opcional (aparece também na pasta da aeronave):</span><div class="docacs-row">`+
@@ -176,6 +177,8 @@ function renderDocs(scope){
   target.querySelectorAll('.docdel').forEach(b=>b.addEventListener('click',()=>excluirDoc(scope, b.dataset.id)));
   const nc = target.querySelector('#docNewCat');
   if(nc) nc.addEventListener('click',()=>addDocCat(scope));
+  const sy = target.querySelector('#docSync');
+  if(sy) sy.addEventListener('click',()=>{ sy.disabled=true; syncStorageDocs().finally(()=>{ sy.disabled=false; }); });
   target.querySelectorAll('.catdel').forEach(b=>b.addEventListener('click',()=>removeDocCat(scope, b.dataset.cat)));
   target.querySelectorAll('.docmove').forEach(s=>s.addEventListener('change',()=>{ moveDoc(scope, s.dataset.id, s.value); }));
 }
@@ -200,6 +203,38 @@ function toggleDocAc(id, mat){
 function docAcsChips(d){
   const acs=Array.isArray(d.acs)?d.acs:[];
   return acs.length? acs.map(m=>`<span class="acchip">✈ ${esc(m)}</span>`).join('') : '<span class="muted" style="font-size:11px">sem aeronave</span>';
+}
+
+// ---- Sincroniza metadados com o Storage: recupera arquivos que estão no bucket mas sem card no app ----
+async function syncScopeStorage(folder, scope){
+  if(!STORAGE) return 0;
+  const listRef = STORAGE.ref().child('docs/'+folder);
+  let res; try{ res = await listRef.listAll(); }catch(e){ console.warn('listAll',folder,e); return 0; }
+  const list = docList(scope);
+  const known = new Set(list.map(d=>d.path).filter(Boolean));
+  let added=0;
+  for(const item of res.items){
+    if(known.has(item.fullPath)) continue;
+    let url='', meta={};
+    try{ url = await item.getDownloadURL(); }catch(e){ continue; }
+    try{ meta = await item.getMetadata(); }catch(e){}
+    const raw = item.name.replace(/^\d+_/,'');   // tira o prefixo de data
+    list.push({ id:docNewId(), nome:raw, categoria:'Outros', tamanho:(meta&&meta.size)?+meta.size:null,
+      tipo:(meta&&meta.contentType)||'', url:url, path:item.fullPath, rev:'', validade:'', acs:[],
+      enviadoEm:(STATE.hoje||todayISO()) });
+    added++;
+  }
+  return added;
+}
+async function syncStorageDocs(){
+  if(!STORAGE){ toast('⚠ Storage não disponível'); return; }
+  toast('🔄 Sincronizando com o Storage…');
+  let total=0;
+  total += await syncScopeStorage('_geral','geral');
+  for(const ac of Object.keys(STATE.acmaps||{})){ total += await syncScopeStorage(ac, ac); }
+  if(total){ saveAll(); toast('✔ '+total+' arquivo(s) recuperado(s) do Storage'); }
+  else toast('✔ Tudo sincronizado — nada faltando');
+  renderDocsGeral();
 }
 
 function renderDocsGeral(){ renderDocs('geral'); }
