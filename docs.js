@@ -39,7 +39,7 @@ function removeDocCat(scope, name){
 function docNewId(){ return 'doc'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36); }
 function fmtMB(b){ return b==null?'':(b/1048576).toFixed(b<1048576?2:1)+' MB'; }
 
-async function uploadDoc(scope, file, categoria, meta){
+async function uploadDoc(scope, file, categoria, meta, defer){
   if(!STORAGE){ toast('⚠ Ative o Firebase Storage no console pra enviar arquivos'); return null; }
   if(!file){ toast('Selecione um arquivo'); return null; }
   const safe = file.name.replace(/[^\w.\- ]+/g,'_');
@@ -55,8 +55,7 @@ async function uploadDoc(scope, file, categoria, meta){
       acs:(meta&&Array.isArray(meta.acs))?meta.acs:[],
       enviadoEm:(STATE.hoje||todayISO()) };
     docList(scope).push(rec);
-    saveAll();
-    toast('✔ '+file.name+' enviado');
+    if(!defer){ saveAll(); toast('✔ '+file.name+' enviado'); }
     return rec;
   }catch(e){
     console.error('uploadDoc',e);
@@ -105,6 +104,7 @@ function renderDocs(scope){
       <button class="btn g sm" id="docUp">⬆ Enviar documento</button>
       <button class="btn o sm" id="docNewCat">➕ Nova pasta</button>
       ${isGeral?'<button class="btn o sm" id="docSync" title="Recupera arquivos que estão no Storage mas não aparecem aqui">🔄 Sincronizar com o Storage</button>':''}
+      ${isGeral?'<button class="btn o sm" id="docAutoAc" title="Vincula cada documento à aeronave detectada no nome do arquivo">✈ Auto-vincular pelo nome</button>':''}
     </div>`;
   if(isGeral){
     h += `<div class="docacs no-print"><span class="muted">Vincular à(s) aeronave(s) — opcional (aparece também na pasta da aeronave):</span><div class="docacs-row">`+
@@ -162,11 +162,17 @@ function renderDocs(scope){
     const cat = target.querySelector('#docCat').value;
     const rev = target.querySelector('#docRev').value.trim();
     const val = target.querySelector('#docVal').value.trim();
-    const acs = [...target.querySelectorAll('.docacchk:checked')].map(c=>c.value);
-    up.disabled=true; let ok=0;
-    for(const f of files){ const r = await uploadDoc(scope, f, cat, {rev,validade:val,acs}); if(r) ok++; }
+    const acsManual = [...target.querySelectorAll('.docacchk:checked')].map(c=>c.value);
+    up.disabled=true; let ok=0; const many=files.length>1;
+    for(const f of files){
+      const auto = (scope==='geral') ? detectAcsFromName(f.name) : [];
+      const acs = auto.length ? auto : acsManual;   // matrícula no nome tem prioridade; senão o que foi marcado
+      const r = await uploadDoc(scope, f, cat, {rev,validade:val,acs}, /*defer*/many);
+      if(r) ok++;
+    }
+    if(many){ saveAll(); }   // salva uma vez só no fim (mais rápido e sem concorrência)
     up.disabled=false;
-    if(files.length>1) toast('✔ '+ok+'/'+files.length+' documentos enviados');
+    toast('✔ '+ok+'/'+files.length+' documento(s) enviado(s)');
     if(ok) renderDocs(scope);
   });
   target.querySelectorAll('.docacsedit').forEach(b=>b.addEventListener('click',()=>{
@@ -179,6 +185,8 @@ function renderDocs(scope){
   if(nc) nc.addEventListener('click',()=>addDocCat(scope));
   const sy = target.querySelector('#docSync');
   if(sy) sy.addEventListener('click',()=>{ sy.disabled=true; syncStorageDocs().finally(()=>{ sy.disabled=false; }); });
+  const av = target.querySelector('#docAutoAc');
+  if(av) av.addEventListener('click',()=>autoVincularGeral());
   target.querySelectorAll('.catdel').forEach(b=>b.addEventListener('click',()=>removeDocCat(scope, b.dataset.cat)));
   target.querySelectorAll('.docmove').forEach(s=>s.addEventListener('change',()=>{ moveDoc(scope, s.dataset.id, s.value); }));
 }
@@ -188,10 +196,25 @@ function moveDoc(scope, id, novaCat){
 }
 
 // ---- vínculo de documentos da Pasta Geral com aeronaves ----
-function acDocsList(){
-  const fromFrota = (STATE.frota&&STATE.frota.length)? STATE.frota.map(f=>f.mat).filter(Boolean) : [];
-  const fromMaps = Object.keys(STATE.acmaps||{});
-  return [...new Set(fromFrota.concat(fromMaps))];
+// matrículas conhecidas (frota + mapas), no formato XX-XXX
+function docMatriculas(){
+  const mats=[];
+  (STATE.frota||[]).forEach(f=>{ const mm=(f.mat||'').toUpperCase().match(/[A-Z]{2}-?[A-Z]{3}/); if(mm){ let m=mm[0]; if(m.indexOf('-')<0) m=m.slice(0,2)+'-'+m.slice(2); mats.push(m); } });
+  Object.keys(STATE.acmaps||{}).forEach(k=>{ if(mats.indexOf(k)<0) mats.push(k); });
+  return [...new Set(mats)];
+}
+function acDocsList(){ return docMatriculas(); }
+// detecta a(s) matrícula(s) presentes no nome do arquivo (ex.: "OS 013 PS-ALT 2026.pdf" -> PS-ALT)
+function detectAcsFromName(nome){
+  const up=(nome||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  return docMatriculas().filter(m=>up.indexOf(m.replace(/[^A-Z0-9]/g,''))>=0);
+}
+// corrige o vínculo de todos os documentos da Geral pela matrícula do nome
+function autoVincularGeral(){
+  let n=0;
+  (STATE.docsGeral||[]).forEach(d=>{ const auto=detectAcsFromName(d.nome); if(auto.length){ d.acs=auto; n++; } });
+  saveAll(); renderDocsGeral();
+  toast(n?('✔ '+n+' documento(s) vinculado(s) pela matrícula do nome'):'Nenhuma matrícula reconhecida nos nomes');
 }
 function geralVinculadosAC(mat){ return (STATE.docsGeral||[]).filter(d=>Array.isArray(d.acs)&&d.acs.indexOf(mat)>=0); }
 function toggleDocAc(id, mat){
