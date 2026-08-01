@@ -410,7 +410,7 @@ function osBuildFromSelection(){
     dataISO:iso,
     dataAberturaBR:new Date(iso+'T00:00:00').toLocaleDateString('pt-BR'),
     oficina:'', matricula:(a.matricula||STATE.currentAC), sn:(a.sn||''), nM:nM, nH:nH,
-    aer:{tsn:g(C.celula_horas),tso:'',csn:g(C.celula_ciclos),cso:''},
+    aer:{tsn:g(C.celula_horas),tso:'',pousos:g(C.celula_pousos),csn:g(C.celula_ciclos),cso:''},
     mot:[], hel:[],
     servicos:items.map(t=>esc0(t.nome)+(t.pn?' — P/N '+t.pn:'')+(t.sn?' · S/N '+t.sn:'')),
     execNum:'', execData:''
@@ -426,7 +426,7 @@ function osLegacyData(e){
   return {numero:e.numero||osNextLabel().label, dataISO:e.data||todayISO(),
     dataAberturaBR:e.data?new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR'):'',
     oficina:'', matricula:(a.matricula||STATE.currentAC), sn:(a.sn||''), nM:2, nH:2,
-    aer:{tsn:'',tso:'',csn:'',cso:''},
+    aer:{tsn:'',tso:'',pousos:'',csn:'',cso:''},
     mot:[{pn:'',sn:'',tsn:'',tso:'',csn:'',cso:''},{pn:'',sn:'',tsn:'',tso:'',csn:'',cso:''}],
     hel:[{pn:'',sn:'',tsn:'',tso:''},{pn:'',sn:'',tsn:'',tso:''}],
     servicos:(e.itens||[]).slice(), execNum:'', execData:''};
@@ -442,7 +442,7 @@ function osRenderSvcList(arr){
 function osDocHTML(d){
   const logo=(window.JETFOR_SEED&&window.JETFOR_SEED.logo)||'';
   const logoHtml=logo?`<span class="fh-logobox"><img class="fh-logo" src="${logo}" alt="JetFor"></span>`:`<span class="fh-jf">✈ JETFOR</span>`;
-  let util=`<tr><th>AERONAVE</th><td colspan="2">TSN: ${osInp('aer.tsn',d.aer.tsn)}</td><td>TSO: ${osInp('aer.tso',d.aer.tso)}</td><td colspan="2">CSN: ${osInp('aer.csn',d.aer.csn)}</td><td>CSO: ${osInp('aer.cso',d.aer.cso)}</td></tr>`;
+  let util=`<tr><th>AERONAVE (Célula)</th><td colspan="2">Horas: ${osInp('aer.tsn',d.aer.tsn)}</td><td colspan="2">Pousos: ${osInp('aer.pousos',d.aer.pousos)}</td><td colspan="2">Ciclos: ${osInp('aer.csn',d.aer.csn)}</td></tr>`;
   d.mot.forEach((mo,i)=>{ util+=`<tr><th>Motor ${i+1}</th><td>P/N: ${osInp('mot.'+i+'.pn',mo.pn)}</td><td>S/N: ${osInp('mot.'+i+'.sn',mo.sn)}</td><td>TSN: ${osInp('mot.'+i+'.tsn',mo.tsn)}</td><td>TSO: ${osInp('mot.'+i+'.tso',mo.tso)}</td><td>CSN: ${osInp('mot.'+i+'.csn',mo.csn)}</td><td>CSO: ${osInp('mot.'+i+'.cso',mo.cso)}</td></tr>`; });
   d.hel.forEach((he,i)=>{ util+=`<tr><th>Hélice ${i+1}</th><td>P/N: ${osInp('hel.'+i+'.pn',he.pn)}</td><td>S/N: ${osInp('hel.'+i+'.sn',he.sn)}</td><td colspan="2">TSN: ${osInp('hel.'+i+'.tsn',he.tsn)}</td><td colspan="2">TSO: ${osInp('hel.'+i+'.tso',he.tso)}</td></tr>`; });
   return `
@@ -489,7 +489,7 @@ function osCollect(){
   const b=OSCUR||{};
   const d={ numero:gv('numero')||b.numero, dataAberturaBR:gv('dataAbertura'), dataISO:b.dataISO,
     oficina:gv('oficina'), matricula:b.matricula, sn:b.sn, nM:b.nM||0, nH:b.nH||0,
-    aer:{tsn:gv('aer.tsn'),tso:gv('aer.tso'),csn:gv('aer.csn'),cso:gv('aer.cso')},
+    aer:{tsn:gv('aer.tsn'),tso:gv('aer.tso'),pousos:gv('aer.pousos'),csn:gv('aer.csn'),cso:gv('aer.cso')},
     mot:[], hel:[], servicos:osSvcValues().map(s=>s.trim()).filter(Boolean),
     execNum:gv('execNum'), execData:gv('execData') };
   for(let i=0;i<d.nM;i++) d.mot.push({pn:gv('mot.'+i+'.pn'),sn:gv('mot.'+i+'.sn'),tsn:gv('mot.'+i+'.tsn'),tso:gv('mot.'+i+'.tso'),csn:gv('mot.'+i+'.csn'),cso:gv('mot.'+i+'.cso')});
