@@ -43,11 +43,13 @@ function fmtDate(d){ if(!d) return '—'; return d.toLocaleDateString('pt-BR'); 
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2200); }
 
 // ---------- CÁLCULO (replica as fórmulas do Excel) ----------
-function compute(task){
+function compute(task){ return computeWith(task, STATE.contadores, STATE.hoje||todayISO()); }
+function computeWith(task, CT, hoje){
+  CT = CT||{}; hoje = hoje||todayISO();
   const r = { num:null, cal:null, status:'ok' };
   // parte numérica (horas/pousos/ciclos)
   if(task.base && task.base!=='calendario'){
-    const counter = STATE.contadores[task.base];
+    const counter = CT[task.base];
     let venc = null;
     if(task.intervalo!=null && task.exec!=null) venc = task.exec + task.intervalo;   // VENC = EXEC + INTERVALO
     else if(task.vencFixo!=null) venc = task.vencFixo;                                // limite fixo (LLP)
@@ -58,7 +60,7 @@ function compute(task){
   // parte calendário (co-limite ou tarefa só-calendário)
   if(task.cal && task.cal.exec){
     const vd = addMonths(task.cal.exec, task.cal.meses);
-    const dd = daysBetween(STATE.hoje||todayISO(), vd);
+    const dd = daysBetween(hoje, vd);
     r.cal = { venc:vd, disp:dd };
   }
   // status = pior caso entre numérico e calendário
@@ -130,6 +132,14 @@ function seedAllAC(){
         const m=STATE.acmaps[ac];
         acDoc(ac).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),updatedAt:new Date().toISOString()})
           .catch(e=>console.error('seed '+ac,e));
+      } else if(ac!==STATE.currentAC){
+        // carrega os dados reais (contadores + baixas) das OUTRAS aeronaves p/ o status do card ficar correto
+        const d=snap.data()||{}; const m=STATE.acmaps[ac]; if(!m) return;
+        if(d.contadores) m.contadores=d.contadores;
+        if(d.tarefas) m.tarefas=d.tarefas;
+        if(d.da) m.da=d.da;
+        migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac);
+        if($('#view-inicio').dataset.done) drawFleet();
       }
     }).catch(e=>console.error('seed get '+ac,e));
   });
@@ -858,6 +868,36 @@ function matchAcmapKey(f){
   for(const k in am){ if(am[k].aeronave && f.modelo && am[k].aeronave.modelo===f.modelo) return k; }
   return null;
 }
+// status agregado das tarefas de uma aeronave (para o card da página inicial)
+function fleetStatus(ac){
+  const m=STATE.acmaps[ac]; if(!m) return null;
+  const C=m.contadores||{}; const hoje=STATE.hoje||todayISO();
+  const tarefas=(m.tarefas||[]).filter(t=>t.categoria!=='ica');
+  if(!tarefas.length) return null;
+  let od=0,wn=0,ok=0, proxH=null,proxHu='', proxD=null;
+  tarefas.forEach(t=>{
+    const c=computeWith(t,C,hoje);
+    if(c.status==='od') od++; else if(c.status==='wn') wn++; else ok++;
+    if(c.num && c.num.disp!=null && c.num.disp>=0){ if(proxH==null||c.num.disp<proxH){ proxH=c.num.disp; proxHu=c.num.unit; } }
+    if(c.cal && c.cal.disp!=null && c.cal.disp>=0){ if(proxD==null||c.cal.disp<proxD) proxD=c.cal.disp; }
+  });
+  return {od,wn,ok,total:tarefas.length,proxH,proxHu,proxD};
+}
+function fleetStatusHTML(mapa){
+  if(!mapa || !STATE.acmaps[mapa]) return '';
+  const s=fleetStatus(mapa); if(!s) return '';
+  let badges;
+  if(s.od===0 && s.wn===0){ badges='<span class="stok">✓ Tudo em dia</span>'; }
+  else{
+    badges = (s.od?`<span class="stod">🔴 ${s.od} vencida${s.od>1?'s':''}</span>`:'')
+           + (s.wn?`<span class="stwn">🟠 ${s.wn} próxima${s.wn>1?'s':''}</span>`:'');
+  }
+  const prox=[];
+  if(s.proxH!=null) prox.push(fmtN(s.proxH,0)+' '+(s.proxHu||'h'));
+  if(s.proxD!=null) prox.push(s.proxD+' dias');
+  const proxTxt = prox.length? `<div class="stprox">⏱ Próxima a vencer em <b>${prox.join(' · ')}</b></div>` : '';
+  return `<div class="acstatus">${badges}${proxTxt}</div>`;
+}
 function drawFleet(){
   const fleet=STATE.frota||[], ats=window.JETFOR_DASH.atividades;
   // auto-vincula cada card ao mapa correspondente (por matrícula ou modelo)
@@ -877,6 +917,7 @@ function drawFleet(){
       <div class="row"><b>TCDS:</b> ${esc(f.tcds)}</div>
       <div class="row"><b>Assentos (excl. piloto):</b> ${esc(f.assentos)}</div>
       <div class="row">${esc(f.obs)}</div>
+      ${fleetStatusHTML(f.mapa)}
       ${f.mapa?`<div class="verMapa" data-map="${i}">Ver mapa de manutenção →</div>`:`<div class="row" style="color:#b0b6c0">Mapa em breve</div>`}
     </div>`;}).join('')+`<button class="ac addac no-print" id="btnAddAc">＋<br>Adicionar aeronave</button>`;
   const openFromCard=i=>{ const f=fleet[i]; if(f&&f.mapa&&STATE.acmaps[f.mapa]) openMap(f.mapa); else toast('Mapa ainda não disponível para esta aeronave'); };
@@ -1126,7 +1167,10 @@ function renderICA(){
   $('#mapa-sheet').querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>openModal(b.dataset.edit)));
 }
 function selectMapaSubtab(k){
+  const inMenu=(k!=='hist'&&k!=='docs');
   document.querySelectorAll('#mapaSubtabs .subtab').forEach(b=>b.classList.toggle('active',b.dataset.sheet===k));
+  const grp=document.querySelector('#mapaSubtabs .subgrp'); if(grp) grp.classList.toggle('active',inMenu);
+  const sel=$('#mapaTabSel'); if(sel && inMenu && sel.value!==k) sel.value=k;
   if(k==='mapa'){ $('#mapa-main').style.display=''; $('#mapa-sheet').style.display='none'; }
   else if(k==='ica'){ $('#mapa-main').style.display='none'; renderICA(); $('#mapa-sheet').style.display=''; }
   else if(k==='hist'){ $('#mapa-main').style.display='none'; renderHistoricoOS(); $('#mapa-sheet').style.display=''; }
@@ -1136,13 +1180,17 @@ function selectMapaSubtab(k){
 }
 function buildMapaSubtabs(){
   const da=cur().da||{sheets:{}}; const bar=$('#mapaSubtabs');
-  let h='<button class="subtab active" data-sheet="mapa">Mapa de Manutenção</button>';
   const temICA=(cur().tarefas||[]).some(t=>t.categoria==='ica');
-  if(temICA) h+='<button class="subtab" data-sheet="ica">ICA / Grandes Modificações</button>';
-  Object.keys(da.sheets||{}).forEach(k=>{ h+=`<button class="subtab" data-sheet="${k}">${esc(da.sheets[k].title||k)}</button>`; });
-  h+='<button class="subtab" data-sheet="hist">Histórico de O.S.</button>';
-  h+='<button class="subtab" data-sheet="docs">📁 Documentos</button>';
-  bar.innerHTML=h;
+  // menu "Mapa de Manutenção" agrupa: mapa + ICA + todas as DAs/boletins
+  let opts='<option value="mapa">Mapa de Manutenção</option>';
+  if(temICA) opts+='<option value="ica">ICA / Grandes Modificações</option>';
+  Object.keys(da.sheets||{}).forEach(k=>{ const sh=da.sheets[k]; const n=(sh.rows&&sh.rows.length)||0; opts+=`<option value="${esc(k)}">${esc(sh.title||k)}${n?'':' (vazio)'}</option>`; });
+  bar.innerHTML =
+    '<span class="subgrp active"><span class="subgrp-lbl">🔧 Mapa de Manutenção</span>'+
+    '<select id="mapaTabSel" class="subsel" title="escolha o mapa ou a aba de DA/boletim">'+opts+'</select></span>'+
+    '<button class="subtab" data-sheet="hist">🗂 Histórico de O.S.</button>'+
+    '<button class="subtab" data-sheet="docs">📁 Documentos</button>';
+  const sel=$('#mapaTabSel'); if(sel) sel.addEventListener('change',()=>selectMapaSubtab(sel.value));
   bar.querySelectorAll('.subtab').forEach(b=>b.addEventListener('click',()=>selectMapaSubtab(b.dataset.sheet)));
 }
 // ---------- trocar de aeronave ----------
