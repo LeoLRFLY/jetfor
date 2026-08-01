@@ -239,16 +239,19 @@ function applyFullRebuild(m, ac){
     const k = normName(it.nome);
     const q = byName[k];
     const match = q && q.length ? q.shift() : null;
-    if(match && Array.isArray(match.hist) && match.hist.length){
-      // usuário já deu baixa: a baixa dele prevalece sobre o Excel
-      nt.hist = match.hist;
-      if(match.exec!=null) nt.exec = match.exec;
-      if(match.vencFixo!=null) nt.vencFixo = match.vencFixo;
-      if(match.cal && match.cal.exec) nt.cal = match.cal;
+    if(match){
+      // ESTRUTURA vem da full (Excel); ESTADO DE CUMPRIMENTO (baixas do usuário) vem do banco,
+      // com ou sem histórico — assim nenhuma baixa se perde.
+      if(match.exec!=null && match.exec!=='' && nt.base && nt.base!=='calendario') nt.exec = num(match.exec);
+      if(match.vencFixo!=null && match.vencFixo!=='' && nt.vencFixo!=null) nt.vencFixo = num(match.vencFixo);
+      if(match.cal && match.cal.exec){ nt.cal = { meses:(nt.cal&&nt.cal.meses!=null)?nt.cal.meses:(match.cal.meses!=null?match.cal.meses:null), exec:match.cal.exec }; }
       if(match.obs) nt.obs = match.obs;
+      if(Array.isArray(match.hist) && match.hist.length) nt.hist = match.hist;
     }
     return nt;
   });
+  // preserva itens que existiam no banco e NÃO estão na planilha (criados/editados pelo usuário) — nada some
+  Object.keys(byName).forEach(k=>{ (byName[k]||[]).forEach(extra=>{ if(extra) m.tarefas.push(extra); }); });
 }
 function migrateMapsFull(){ Object.keys(STATE.acmaps||{}).forEach(ac=>{ const m=STATE.acmaps[ac]; migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac); }); }
 function buildCounterGroups(){
