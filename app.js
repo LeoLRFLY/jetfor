@@ -1194,6 +1194,11 @@ function buildMapaSubtabs(){
   bar.querySelectorAll('.subtab').forEach(b=>b.addEventListener('click',()=>selectMapaSubtab(b.dataset.sheet)));
 }
 // ---------- trocar de aeronave ----------
+function fillAcSwitch(){
+  const sel=$('#acSwitch'); if(!sel) return;
+  const acs=Object.keys(STATE.acmaps||{}).filter(k=>STATE.acmaps[k]&&STATE.acmaps[k].aeronave);
+  sel.innerHTML=acs.map(k=>{ const a=STATE.acmaps[k].aeronave||{}; return `<option value="${esc(k)}" ${k===STATE.currentAC?'selected':''}>✈ ${esc(a.matricula||k)} — ${esc(a.modelo||'')}</option>`; }).join('');
+}
 function openMap(ac){
   if(!ac || !STATE.acmaps[ac]){ toast('Mapa ainda não disponível para esta aeronave'); return; }
   STATE.currentAC=ac;
@@ -1201,6 +1206,7 @@ function openMap(ac){
   const a=m.aeronave||{};
   const label=`${a.matricula||ac} · ${a.modelo||''}${a.sn?' · S/N '+a.sn:''}`;
   $('#acbadge').textContent='✈ '+label;
+  fillAcSwitch();
   $('#acinfo').textContent=label+(a.ano?' · '+a.ano:'');
   buildMapaSubtabs();
   fillGroupFilters(); renderCounters(); renderTable();
@@ -1349,6 +1355,7 @@ function boot(){
   $('#histOverlay').addEventListener('click',e=>{ if(e.target.id==='histOverlay') closeHist(); });
   $('#f_cat').addEventListener('change',onCatChange);
   if($('#f_tipoControle')) $('#f_tipoControle').addEventListener('change',onTipoControleChange);
+  if($('#acSwitch')) $('#acSwitch').addEventListener('change',e=>{ if(e.target.value && e.target.value!==STATE.currentAC) openMap(e.target.value); });
   $('#f_grupoNew').addEventListener('click',e=>{ e.preventDefault(); novoGrupo(); });
   $('#f_troca').addEventListener('click',registrarTroca);
   $('#daOk').addEventListener('click',saveDA);

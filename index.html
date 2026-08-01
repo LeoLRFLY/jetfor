@@ -192,6 +192,8 @@
   /* ---- barra da aeronave + sub-abas do mapa ---- */
   .acbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px}
   .acbadge{background:var(--navy);color:#fff;font-size:12px;font-weight:700;padding:6px 12px;border-radius:8px;white-space:nowrap}
+  .acswitch{background:var(--navy2);color:#fff;font-size:13px;font-weight:700;padding:7px 12px;border-radius:8px;border:2px solid var(--navy);cursor:pointer;max-width:280px}
+  .acswitch option{background:#fff;color:var(--navy)}
   /* ---- DA/Boletins ---- */
   .subtabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:0}
   .subtab{background:#fff;border:1px solid var(--line);border-radius:8px 8px 0 0;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;color:var(--navy2)}
@@ -434,6 +436,7 @@
 <div class="wrap" id="view-mapa" style="display:none">
 
   <div class="acbar">
+    <select id="acSwitch" class="acswitch" title="Trocar de aeronave"></select>
     <span class="acbadge" id="acbadge">✈ PT-LJQ · Cessna S550 · S/N S550-0113</span>
     <div class="subtabs" id="mapaSubtabs">
       <button class="subtab active" data-sheet="mapa">Mapa de Manutenção</button>
