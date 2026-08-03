@@ -1041,7 +1041,7 @@ const CONFIAB_TIPOS=['Reporte de piloto (PIREP)','Remoção não programada','At
 let CONFIAB_FROM='freq';
 function openConfiab(from){
   if(from) CONFIAB_FROM=from;
-  ['inicio','freq','mapa','obrig','forms','geral','oficinas'].forEach(v=>{ const el=$('#view-'+v); if(el) el.style.display='none'; });
+  ['inicio','freq','mapa','obrig','sasc','forms','geral','oficinas'].forEach(v=>{ const el=$('#view-'+v); if(el) el.style.display='none'; });
   document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
   const cv=$('#view-confiab'); if(cv) cv.style.display='';
   renderConfiab();
@@ -1119,6 +1119,62 @@ function confiabDel(id){
   if(!window.confirm('Remover esta ocorrência?')) return;
   STATE.confiab=(STATE.confiab||[]).filter(r=>r.id!==id);
   saveConfiab(); renderConfiabList();
+}
+
+// ================= MENU SASC (workspace do programa) =================
+function openFormItem(k){
+  switchView('forms');
+  setTimeout(()=>{ const b=document.querySelector('#view-forms .fsbtn[data-form="'+k+'"]'); if(b) b.click(); },40);
+}
+const SASC_ITEMS=[
+  {key:'geral', label:'📌 Visão geral', html:()=>`
+    <div class="cfbnote">O <b>SASC</b> (Sistema de Análise e Supervisão da Continuidade — IS 120-016) é o programa de aeronavegabilidade continuada da frota <b>10+ assentos</b>. Aqui ficam as ferramentas para operá-lo: coleta de confiabilidade, comitê, relatórios, alertas e auditorias.</div>
+    <div class="sascgrid">
+      <div class="sasccard" onclick="openConfiab('sasc')"><div class="si">📊</div><div><b>Confiabilidade</b><div class="sd">Registrar ocorrências e (em breve) taxas e alertas por ATA.</div></div></div>
+      <div class="sasccard" onclick="sascShow('comite')"><div class="si">🗓</div><div><b>Comitê SASC & Atas</b><div class="sd">Reunião trimestral · F-SASC-01.</div></div></div>
+      <div class="sasccard" onclick="sascShow('alerta')"><div class="si">🚦</div><div><b>Níveis de Alerta</b><div class="sd">Relatório mensal de confiabilidade.</div></div></div>
+      <div class="sasccard" onclick="openFormItem('rsi')"><div class="si">📄</div><div><b>RSI (135.417)</b><div class="sd">Interrupção mecânica mensal.</div></div></div>
+      <div class="sasccard" onclick="switchView('oficinas')"><div class="si">🔍</div><div><b>Auditorias SASC</b><div class="sd">F-SASC-02 · oficinas e fornecedores.</div></div></div>
+      <div class="sasccard" onclick="sascShow('iio')"><div class="si">✅</div><div><b>IIO</b><div class="sd">Itens de Inspeção Obrigatória.</div></div></div>
+    </div>
+    <div class="cfbnote" style="background:#f7f9fc;border-left-color:var(--gold)">A frota SASC hoje: <b>PR-ARN</b> (B200GT) e os <b>Citation</b> (PR-FHN / PT-LJQ) em inclusão. Veja a matriz completa na aba <a href="#" onclick="switchView('obrig');return false">Obrigações MGM (SASC / PMAC)</a>.</div>`},
+  {key:'confiab', label:'📊 Confiabilidade', launch:()=>openConfiab('sasc')},
+  {key:'comite', label:'🗓 Comitê SASC & Atas', html:()=>`
+    <div class="cfbcardt">Comitê SASC & Atas (F-SASC-01)</div>
+    <div class="cfbnote">Reunião <b>trimestral</b> do Comitê SASC para analisar indicadores de confiabilidade, itens acima do nível de alerta e a eficácia das ações corretivas. Registro em ata (formulário F-SASC-01), com decisões e responsáveis. Base: MGM 5.6 · IS 120-016.</div>
+    <div class="sascph">🚧 Módulo em construção — aqui vai entrar o registro das reuniões (data, participantes, pauta, decisões) e o histórico de atas. Quer que eu monte na próxima etapa?</div>`},
+  {key:'alerta', label:'🚦 Níveis de Alerta / Relatório', html:()=>`
+    <div class="cfbcardt">Níveis de Alerta / Relatório de Confiabilidade</div>
+    <div class="cfbnote">Saída <b>mensal</b> do programa: taxas por ATA (por 1000h/ciclos) em janela de 12 meses, comparadas aos níveis de alerta, com tendência e reincidentes. Alimentado pelas ocorrências do módulo de Confiabilidade.</div>
+    <div class="sascph">🚦 Este painel é a <b>etapa 2</b> do módulo de Confiabilidade (o cálculo automático). Assim que você validar a coleta, eu ligo os cálculos e o painel verde/amarelo/vermelho aparece aqui.
+    <div style="margin-top:10px"><button class="btn p" onclick="openConfiab('sasc')">Ir para a coleta de Confiabilidade →</button></div></div>`},
+  {key:'iio', label:'✅ Itens de Inspeção Obrigatória', html:()=> (window.JETFOR_IIO? iioHtml() : '<div class="cfbnote">Conteúdo de IIO não carregado.</div>')}
+];
+function sascShow(k){
+  const it=SASC_ITEMS.find(x=>x.key===k)||SASC_ITEMS[0];
+  document.querySelectorAll('#view-sasc .fsbtn[data-sasc]').forEach(b=>b.classList.toggle('active',b.dataset.sasc===it.key));
+  const body=$('#sascBody'); if(!body) return;
+  if(it.launch){ it.launch(); return; }
+  body.innerHTML=`<div class="dashview">${it.html?it.html():''}</div>`;
+}
+function renderSasc(){
+  const el=$('#view-sasc'); if(!el) return;
+  if(!el.dataset.done){
+    const side=SASC_ITEMS.map((it,i)=>`<button class="fsbtn ${i===0?'active':''}" data-sasc="${it.key}">${esc(it.label)}</button>`).join('');
+    el.innerHTML=`<div class="formlayout">
+      <aside class="formside no-print">
+        <div class="fsgroup"><div class="fsgt">🛡 Programa SASC</div>${side}</div>
+        <div class="fsgroup"><div class="fsgt">Relacionado</div>
+          <button class="fsbtn link" onclick="switchView('obrig')">📋 Obrigações MGM (SASC/PMAC) ↗</button>
+          <button class="fsbtn link" onclick="switchView('oficinas')">🏭 Oficinas & Auditorias ↗</button>
+        </div>
+      </aside>
+      <div class="formmain"><div id="sascBody"></div></div>
+    </div>`;
+    el.querySelectorAll('.fsbtn[data-sasc]').forEach(b=>b.addEventListener('click',()=>sascShow(b.dataset.sasc)));
+    el.dataset.done='1';
+  }
+  sascShow('geral');
 }
 
 // ---------- Sub-abas do MAPA: DA & Boletins (por aeronave) ----------
@@ -1379,12 +1435,10 @@ function renderForms(){
   const F=window.JETFOR_FORMS; if(!F) return;
   const el=$('#view-forms'); if(el.dataset.done) return;
   const sideForms=F.ordem.map((k,i)=>`<button class="fsbtn ${i===0?'active':''}" data-form="${k}">${esc(F.itens[k].label)}</button>`).join('');
-  const modulos=`<button class="fsbtn mod" onclick="openConfiab('forms')">📊 Confiabilidade (SASC)</button>`;
   const outros=(F.outros||[]).map(o=>`<a class="fsbtn link" href="${o.url}" target="_blank" rel="noopener">${esc(o.nome)} ↗</a>`).join('');
   el.innerHTML=`<div class="formlayout">
     <aside class="formside no-print">
       <div class="fsgroup"><div class="fsgt">Formulários</div>${sideForms}</div>
-      <div class="fsgroup"><div class="fsgt">Módulos operacionais</div>${modulos}</div>
       ${outros?`<div class="fsgroup"><div class="fsgt">Abrir no Drive</div>${outros}</div>`:''}
     </aside>
     <div class="formmain">
@@ -1419,11 +1473,13 @@ function switchView(v){
   $('#view-freq').style.display = v==='freq'?'':'none';
   $('#view-mapa').style.display = v==='mapa'?'':'none';
   $('#view-obrig').style.display = v==='obrig'?'':'none';
+  $('#view-sasc').style.display = v==='sasc'?'':'none';
   $('#view-forms').style.display = v==='forms'?'':'none';
   $('#view-geral').style.display = v==='geral'?'':'none';
   $('#view-oficinas').style.display = v==='oficinas'?'':'none';
   if(v==='inicio') renderInicio();
   if(v==='freq') renderFreq();
+  if(v==='sasc') renderSasc();
   if(v==='obrig') renderObrig();
   if(v==='forms') renderForms();
   if(v==='geral') renderDocsGeral();
@@ -1515,6 +1571,10 @@ function boot(){
   $('#overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
   document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
+  /* recolher/expandir o menu lateral (com memória) */
+  try{ if(localStorage.getItem('jetfor_navcollapsed')==='1') document.body.classList.add('navcollapsed'); }catch(e){}
+  const navTgl=$('#navToggle');
+  if(navTgl) navTgl.addEventListener('click',()=>{ const c=document.body.classList.toggle('navcollapsed'); try{ localStorage.setItem('jetfor_navcollapsed', c?'1':'0'); }catch(e){} });
   /* sub-abas do mapa são ligadas dinamicamente em buildMapaSubtabs() */
   $('#acOk').addEventListener('click',saveAcModal);
   $('#acCancel').addEventListener('click',closeAcModal);

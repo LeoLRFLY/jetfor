@@ -38,13 +38,29 @@
   .badge.off{background:#3a4c6b;color:#dfe6f2}
   /* ---- panels ---- */
   .wrap{max-width:1500px;margin:0 auto;padding:14px}
-  /* ---- topnav ---- */
-  .topnav{background:var(--navy2);display:flex;gap:2px;padding:0 14px;position:sticky;top:54px;z-index:35;
-          box-shadow:0 2px 5px rgba(0,0,0,.12)}
-  .navbtn{background:transparent;border:none;color:#c7d2e6;padding:11px 16px;font-size:13px;font-weight:600;
-          cursor:pointer;border-bottom:3px solid transparent}
-  .navbtn:hover{color:#fff}
-  .navbtn.active{color:#fff;border-bottom-color:var(--gold)}
+  /* ---- sidenav (menu lateral recolhível) ---- */
+  .shell{display:flex;align-items:flex-start}
+  .content{flex:1;min-width:0}
+  .sidenav{flex:0 0 236px;background:var(--navy2);position:sticky;top:54px;height:calc(100vh - 54px);
+           overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:2px;padding:8px;z-index:35;
+           box-shadow:2px 0 6px rgba(0,0,0,.10);transition:flex-basis .18s ease}
+  .navbtn{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:transparent;border:none;
+          color:#c7d2e6;padding:11px 12px;font-size:13px;font-weight:600;cursor:pointer;border-radius:8px;
+          border-left:3px solid transparent;white-space:nowrap}
+  .navbtn:hover{color:#fff;background:rgba(255,255,255,.08)}
+  .navbtn.active{color:#fff;background:rgba(255,255,255,.12);border-left-color:var(--gold)}
+  .navbtn .ni{font-size:17px;flex:0 0 22px;text-align:center}
+  .navbtn .nl{overflow:hidden;text-overflow:ellipsis}
+  .navtoggle{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:transparent;border:none;
+             color:#8ea3c4;padding:10px 12px;font-size:13px;font-weight:600;cursor:pointer;border-radius:8px;margin-bottom:4px;white-space:nowrap}
+  .navtoggle:hover{color:#fff;background:rgba(255,255,255,.06)}
+  .navtoggle .ni{font-size:16px;flex:0 0 22px;text-align:center}
+  /* estado recolhido */
+  body.navcollapsed .sidenav{flex-basis:58px}
+  body.navcollapsed .sidenav .nl{display:none}
+  body.navcollapsed .navbtn,body.navcollapsed .navtoggle{justify-content:center;gap:0;padding-left:0;padding-right:0}
+  body.navcollapsed .navbtn{border-left-color:transparent}
+  body.navcollapsed .navbtn.active{border-left-color:transparent;background:rgba(255,255,255,.16)}
   /* ---- obrigações ---- */
   .lead{font-size:12.5px;color:var(--grey);line-height:1.5;margin:0 0 4px}
   .oktag{color:var(--ok);font-weight:700} .notag{color:var(--od);font-weight:700}
@@ -210,6 +226,14 @@
     .formlayout{flex-direction:column}
     .formside{flex:none;width:100%;position:static}
   }
+  /* ---- Cards do menu SASC ---- */
+  .sascgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin:12px 0}
+  .sasccard{display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;transition:box-shadow .15s,transform .15s}
+  .sasccard:hover{box-shadow:0 4px 14px rgba(20,40,75,.16);transform:translateY(-2px);border-color:#c9d8f2}
+  .sasccard .si{font-size:22px;line-height:1}
+  .sasccard b{color:var(--navy);font-size:13.5px}
+  .sasccard .sd{font-size:11.5px;color:#6b7280;margin-top:3px;line-height:1.35}
+  .sascph{background:#fdf6e6;border:1px dashed #e1c877;border-radius:10px;padding:14px 16px;font-size:13px;color:#7a5b12;line-height:1.5;margin-top:8px}
   .dashview .note{font-size:12px;color:#6b7280;margin-top:14px;line-height:1.5}
   .dashview tr.expandable{cursor:pointer}
   .dashview tr.expandable:hover td{background:#eef4ff}
@@ -305,8 +329,15 @@
     header .t1{font-size:13px} header .t2{font-size:9.5px}
     header .spacer{flex:1 0 100%;display:block;height:0}
     header .badge{order:5} header .btn{padding:6px 9px;font-size:11px}
-    .topnav{position:static;top:auto;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 6px}
-    .navbtn{padding:9px 11px;font-size:12px;white-space:nowrap}
+    .shell{flex-direction:column}
+    .sidenav,body.navcollapsed .sidenav{position:static;height:auto;flex:none;width:100%;flex-basis:auto;flex-direction:row;
+            overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;gap:2px;padding:4px 6px}
+    .navtoggle{display:none}
+    .sidenav .nl,body.navcollapsed .sidenav .nl{display:inline}
+    .navbtn,body.navcollapsed .navbtn{flex:0 0 auto;padding:9px 11px;font-size:12px;gap:7px;border-left:none;
+            border-bottom:3px solid transparent;justify-content:flex-start}
+    .navbtn.active,body.navcollapsed .navbtn.active{border-left:none;border-bottom-color:var(--gold);background:rgba(255,255,255,.10)}
+    .navbtn .ni{flex:0 0 auto}
     .wrap{padding:10px}
     .panel h2{font-size:12px;padding:9px 12px}
     .pbody{padding:10px 12px}
@@ -479,19 +510,24 @@
   <input type="file" id="fileImport" accept="application/json" style="display:none">
 </header>
 
-<nav class="topnav no-print">
-  <button class="navbtn active" data-view="inicio">🏠 Início</button>
-  <button class="navbtn" data-view="mapa">🛠 Mapa de Manutenção</button>
-  <button class="navbtn" data-view="freq">📊 Atividades &amp; Frequências</button>
-  <button class="navbtn" data-view="obrig">📋 Obrigações MGM (SASC / PMAC)</button>
-  <button class="navbtn" data-view="forms">📝 Formulários</button>
-  <button class="navbtn" data-view="oficinas">🏭 Oficinas &amp; Auditorias</button>
-  <button class="navbtn" data-view="geral">📁 Pasta Geral</button>
+<div class="shell">
+<nav class="sidenav no-print" id="sidenav">
+  <button class="navtoggle" id="navToggle" title="Recolher/expandir menu"><span class="ni">☰</span><span class="nl">Recolher</span></button>
+  <button class="navbtn active" data-view="inicio"><span class="ni">🏠</span><span class="nl">Início</span></button>
+  <button class="navbtn" data-view="mapa"><span class="ni">🛠</span><span class="nl">Mapa de Manutenção</span></button>
+  <button class="navbtn" data-view="freq"><span class="ni">📊</span><span class="nl">Atividades &amp; Frequências</span></button>
+  <button class="navbtn" data-view="obrig"><span class="ni">📋</span><span class="nl">Obrigações MGM (SASC / PMAC)</span></button>
+  <button class="navbtn" data-view="sasc"><span class="ni">🛡</span><span class="nl">SASC</span></button>
+  <button class="navbtn" data-view="forms"><span class="ni">📝</span><span class="nl">Formulários</span></button>
+  <button class="navbtn" data-view="oficinas"><span class="ni">🏭</span><span class="nl">Oficinas &amp; Auditorias</span></button>
+  <button class="navbtn" data-view="geral"><span class="ni">📁</span><span class="nl">Pasta Geral</span></button>
 </nav>
+<main class="content" id="content">
 
 <div class="wrap dashview" id="view-inicio"></div>
 <div class="wrap dashview" id="view-freq" style="display:none"></div>
 <div class="wrap" id="view-confiab" style="display:none"></div>
+<div class="wrap" id="view-sasc" style="display:none"></div>
 <div class="wrap" id="view-geral" style="display:none"></div>
 <div class="wrap" id="view-oficinas" style="display:none"></div>
 
@@ -567,6 +603,8 @@
 <div class="wrap" id="view-obrig" style="display:none"></div>
 
 <div class="wrap" id="view-forms" style="display:none"></div>
+</main>
+</div>
 
 <!-- EDIT MODAL -->
 <div class="overlay" id="overlay">
