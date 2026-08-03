@@ -85,6 +85,19 @@ function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify
 function loadLocal(){ try{ const s=localStorage.getItem('jetfor_mapa_v2'); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function acDoc(ac){ return DB.collection(window.FIRESTORE_COLECAO||'mapas').doc(ac); }
 
+// Registro de auditoria: grava o que o usuário faz (coleção 'logs').
+function logAction(acao, detalhe){
+  try{
+    if(!DB || !ONLINE || !window.CURRENT_USER) return;
+    DB.collection('logs').add({
+      ts:new Date().toISOString(),
+      uid:window.CURRENT_USER.uid, nome:window.CURRENT_USER.nome||'', email:window.CURRENT_USER.email||'',
+      papel:window.CURRENT_USER.papel||'', acao:String(acao||''), detalhe:String(detalhe||''),
+      ac:(STATE&&STATE.currentAC)||''
+    }).catch(()=>{});
+  }catch(e){}
+}
+
 async function saveAll(){
   saveLocal();
   if(ONLINE && DB){
@@ -407,6 +420,7 @@ function aplicarBaixa(){
   });
   saveAll(); renderTable();
   toast('✔ Baixa aplicada em '+n+' tarefa(s)'+(skip?' ('+skip+' sem intervalo/calendário — não alteradas)':''));
+  logAction('Deu baixa em tarefas', n+' tarefa(s) · '+STATE.currentAC+(ref?' · '+ref:''));
   closeBaixa();
   document.querySelectorAll('#tbl .rowchk:checked').forEach(c=>c.checked=false);
   const ca=$('#chkAll'); if(ca) ca.checked=false; updateOSsel();
@@ -531,12 +545,14 @@ function registrarOS(){
   const y=(d.dataISO||STATE.hoje||todayISO()).slice(0,4);
   STATE.osProx=STATE.osProx||{}; STATE.osProx[y]=(STATE.osProx[y]!=null?STATE.osProx[y]:(y==='2026'?10:1))+1;
   saveAll(); toast('✔ O.S. '+d.numero+' registrada no histórico'); osClose();
+  logAction('Registrou O.S.', 'O.S. '+d.numero+' · '+STATE.currentAC+' · '+d.servicos.length+' item(ns)');
   if($('#mapa-sheet').style.display!=='none') renderHistoricoOS();
 }
 function salvarOSedit(idx){
   const d=osCollect(); const m=cur(); const e=(m.osHistorico||[])[idx]; if(!e){ osClose(); return; }
   e.numero=d.numero; e.itens=d.servicos.slice(); e.qtd=d.servicos.length; e.doc=d;
   saveAll(); toast('✔ O.S. '+d.numero+' atualizada'); osClose();
+  logAction('Editou O.S.', 'O.S. '+d.numero+' · '+STATE.currentAC);
   if($('#mapa-sheet').style.display!=='none') renderHistoricoOS();
 }
 function excluirOS(idx){
@@ -544,6 +560,7 @@ function excluirOS(idx){
   if(!confirm('Excluir a O.S. '+e.numero+'? Esta ação não pode ser desfeita.\n(A numeração NÃO volta atrás — o número não será reutilizado.)')) return;
   m.osHistorico.splice(idx,1);
   saveAll(); toast('🗑 O.S. '+e.numero+' excluída');
+  logAction('Excluiu O.S.', 'O.S. '+e.numero+' · '+STATE.currentAC);
   if($('#osOverlay').classList.contains('show')) osClose();
   if($('#mapa-sheet').style.display!=='none') renderHistoricoOS();
 }
@@ -766,7 +783,9 @@ function saveModal(){
   } else {
     idxs.forEach((idx,k)=>{ const b=baseFor(idx); STATE.tarefas.push(Object.assign({},common,{id:'t'+Date.now().toString(36)+k+Math.floor(Math.random()*1e3).toString(36),base:b,tipoVenc:tvFor(b)})); });
   }
+  const _wasEdit=!!editingId;
   closeModal(); fillGroupFilters(); renderTable(); saveAll();
+  logAction(_wasEdit?'Editou tarefa':'Criou tarefa', nome+' · '+STATE.currentAC);
 }
 function registrarTroca(){
   if(!editingId){ toast('Salve a tarefa antes de registrar a troca'); return; }
@@ -779,11 +798,14 @@ function registrarTroca(){
   if(t.cal) t.cal.exec=data;
   t.hist=t.hist||[]; t.hist.push({data, oficina:'🔧 Troca de peça'+(t.peca?' — '+t.peca:'')+(t.fabricante?' ('+t.fabricante+')':''), leitura:leitura, base:t.base, cal:!!t.cal});
   saveAll(); renderTable(); toast('🔧 Troca registrada no histórico');
+  logAction('Registrou troca de peça', (t.nome||'')+(t.peca?' — '+t.peca:''));
 }
 function deleteTask(){
   if(!editingId) return;
+  const _t=STATE.tarefas.find(x=>x.id===editingId)||{};
   STATE.tarefas=STATE.tarefas.filter(x=>x.id!==editingId);
   closeModal(); fillGroupFilters(); renderTable(); saveAll();
+  logAction('Excluiu tarefa', (_t.nome||'')+' · '+STATE.currentAC);
 }
 
 // ---------- EXPORT / IMPORT ----------
@@ -801,6 +823,7 @@ function importJSON(file){
     if(d.frota) STATE.frota=d.frota;
     if(d.hoje) STATE.hoje=d.hoje;
     buildMapaSubtabs(); renderAll(); if($('#view-inicio').dataset.done) drawFleet(); saveAll(); toast('✔ Importado');
+    logAction('Importou dados (JSON)', file&&file.name||'');
   }catch(e){ toast('Arquivo inválido'); } };
   rd.readAsText(file);
 }
@@ -1126,11 +1149,13 @@ function confiabAdd(){
   ['cf_desc','cf_pn','cf_sn','cf_acao','cf_horas','cf_ciclos','cf_pousos'].forEach(id=>{const e=$('#'+id);if(e)e.value='';});
   renderConfiabList();
   toast('✔ Ocorrência registrada');
+  logAction('Registrou ocorrência (Confiabilidade)', (reg.ac||'')+' · '+(reg.tipo||'')+(reg.ata?' · ATA '+reg.ata:''));
 }
 function confiabDel(id){
   if(!window.confirm('Remover esta ocorrência?')) return;
   STATE.confiab=(STATE.confiab||[]).filter(r=>r.id!==id);
   saveConfiab(); renderConfiabList();
+  logAction('Removeu ocorrência (Confiabilidade)', id);
 }
 
 // ================= MENU SASC (workspace do programa) =================
@@ -1432,14 +1457,17 @@ function saveAcModal(){
     mapa: $('#ac_mapa').checked ? ($('#ac_mat').value.trim()||'aeronave') : null
   };
   if(!rec.modelo){ toast('Informe o modelo'); return; }
+  const _wasEdit=acEditIdx!=null;
   if(acEditIdx!=null) STATE.frota[acEditIdx]=Object.assign({},STATE.frota[acEditIdx],rec);
   else STATE.frota.push(rec);
   closeAcModal(); drawFleet(); saveAll();
+  logAction(_wasEdit?'Editou aeronave':'Adicionou aeronave', rec.mat+' · '+rec.modelo);
 }
 function delAc(i){
   const f=STATE.frota[i]; if(!f) return;
   if(!window.confirm(`Remover a aeronave ${f.mat} (${f.modelo}) do escopo?`)) return;
   STATE.frota.splice(i,1); drawFleet(); saveAll(); toast('Aeronave removida');
+  logAction('Removeu aeronave', (f.mat||'')+' · '+(f.modelo||''));
 }
 
 // ---------- FORMULÁRIOS ----------
@@ -1490,10 +1518,12 @@ function switchView(v){
   $('#view-geral').style.display = v==='geral'?'':'none';
   $('#view-oficinas').style.display = v==='oficinas'?'':'none';
   { const vu=$('#view-usuarios'); if(vu) vu.style.display = v==='usuarios'?'':'none'; }
+  { const vl=$('#view-logs'); if(vl) vl.style.display = v==='logs'?'':'none'; }
   if(v==='inicio') renderInicio();
   if(v==='freq') renderFreq();
   if(v==='sasc') renderSasc();
   if(v==='usuarios' && typeof renderUsuarios==='function') renderUsuarios();
+  if(v==='logs' && typeof renderLogs==='function') renderLogs();
   if(v==='obrig') renderObrig();
   if(v==='forms') renderForms();
   if(v==='geral') renderDocsGeral();

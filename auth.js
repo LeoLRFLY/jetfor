@@ -120,6 +120,7 @@ function doReset(){
   }).catch(e=>_msg('authMsg',authErrMsg(e.code)));
 }
 function authLogout(){
+  if(typeof logAction==='function') logAction('Saiu do sistema','');
   if(AUTH) AUTH.signOut();
 }
 
@@ -158,6 +159,7 @@ function authInit(){
       // registra o último acesso (atualiza SÓ este campo; papel/ativo ficam iguais → seguro nas regras)
       try{ ref.set({ultimoAcesso:new Date().toISOString()},{merge:true}).catch(()=>{}); }catch(e){}
       loadCloudData();
+      if(typeof logAction==='function') logAction('Entrou no sistema','');
     }).catch(e=>{
       console.error(e);
       _msg('authMsg','Não foi possível carregar seu perfil. '+(e&&e.message?e.message:''));
@@ -215,28 +217,86 @@ function usuFmtData(iso){
     return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes());
   }catch(e){ return '—'; }
 }
+function _usuNome(uid){ const u=(window._USU_CACHE||{})[uid]||{}; return u.nome||u.email||uid; }
 function usuSetPapel(uid,papel){
-  DB.collection('usuarios').doc(uid).set({papel:papel},{merge:true}).then(()=>{ toast('✔ Papel atualizado'); }).catch(e=>toast('⚠ '+(e.message||e)));
+  DB.collection('usuarios').doc(uid).set({papel:papel},{merge:true}).then(()=>{ toast('✔ Papel atualizado'); if(typeof logAction==='function') logAction('Alterou papel de usuário', _usuNome(uid)+' → '+papel); }).catch(e=>toast('⚠ '+(e.message||e)));
 }
 function usuSetAtivo(uid,ativo){
-  DB.collection('usuarios').doc(uid).set({ativo:ativo},{merge:true}).then(()=>{ toast(ativo?'✔ Acesso liberado':'✔ Acesso bloqueado'); renderUsuarios(); }).catch(e=>toast('⚠ '+(e.message||e)));
+  DB.collection('usuarios').doc(uid).set({ativo:ativo},{merge:true}).then(()=>{ toast(ativo?'✔ Acesso liberado':'✔ Acesso bloqueado'); if(typeof logAction==='function') logAction(ativo?'Liberou usuário':'Bloqueou usuário', _usuNome(uid)); renderUsuarios(); }).catch(e=>toast('⚠ '+(e.message||e)));
 }
 function usuEditarNome(uid){
   const u=(window._USU_CACHE||{})[uid]||{};
   const novo=window.prompt('Nome do usuário:', u.nome||'');
   if(novo==null) return;
   const nome=novo.trim(); if(!nome){ toast('Nome não pode ficar vazio'); return; }
-  DB.collection('usuarios').doc(uid).set({nome:nome},{merge:true}).then(()=>{ toast('✔ Nome atualizado'); renderUsuarios(); if(window.CURRENT_USER&&window.CURRENT_USER.uid===uid){ window.CURRENT_USER.nome=nome; authUpdateHeader(); } }).catch(e=>toast('⚠ '+(e.message||e)));
+  DB.collection('usuarios').doc(uid).set({nome:nome},{merge:true}).then(()=>{ toast('✔ Nome atualizado'); if(typeof logAction==='function') logAction('Editou nome de usuário', nome); renderUsuarios(); if(window.CURRENT_USER&&window.CURRENT_USER.uid===uid){ window.CURRENT_USER.nome=nome; authUpdateHeader(); } }).catch(e=>toast('⚠ '+(e.message||e)));
 }
 function usuResetSenha(uid){
   const u=(window._USU_CACHE||{})[uid]||{};
   const email=u.email; if(!email){ toast('Usuário sem e-mail'); return; }
   if(!window.confirm('Enviar e-mail de redefinição de senha para '+email+'?')) return;
-  AUTH.sendPasswordResetEmail(email).then(()=>toast('✔ E-mail de redefinição enviado')).catch(e=>toast('⚠ '+authErrMsg(e.code)));
+  AUTH.sendPasswordResetEmail(email).then(()=>{ toast('✔ E-mail de redefinição enviado'); if(typeof logAction==='function') logAction('Enviou redefinição de senha', email); }).catch(e=>toast('⚠ '+authErrMsg(e.code)));
 }
+// ---------- Registro de atividades (auditoria — só admin) ----------
+function renderLogs(){
+  const el=document.getElementById('view-logs'); if(!el) return;
+  if(!window.CURRENT_USER || window.CURRENT_USER.papel!=='admin'){
+    el.innerHTML='<div class="cfbnote">Acesso restrito a administradores.</div>'; return;
+  }
+  el.innerHTML=`<h2 style="color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:6px">📋 Registro de atividades</h2>
+    <div class="cfbnote">Tudo o que os usuários fazem no sistema, do mais recente para o mais antigo. Somente administradores veem esta página.</div>
+    <div class="filters">
+      <select id="lgUser"><option value="">Usuário: todos</option></select>
+      <select id="lgAcao"><option value="">Ação: todas</option></select>
+      <input type="date" id="lgFrom" title="De"><input type="date" id="lgTo" title="Até">
+      <input id="lgBusca" placeholder="Buscar…">
+      <button class="btn o sm" onclick="renderLogs()">↻ Atualizar</button>
+    </div>
+    <div class="tblwrap"><table class="cfbtable"><thead><tr><th>Data/hora</th><th>Usuário</th><th>Papel</th><th>Ação</th><th>Detalhe</th><th>Aeronave</th></tr></thead><tbody id="lgList"><tr><td colspan="6" style="padding:14px;color:#999">Carregando…</td></tr></tbody></table></div>
+    <div class="note" id="lgCount"></div>`;
+  DB.collection('logs').orderBy('ts','desc').limit(1000).get().then(qs=>{
+    const rows=[]; qs.forEach(d=>rows.push(d.data()));
+    window._LOG_CACHE=rows;
+    const users=[...new Set(rows.map(r=>r.nome).filter(Boolean))].sort();
+    const acoes=[...new Set(rows.map(r=>r.acao).filter(Boolean))].sort();
+    const uu=document.getElementById('lgUser'); if(uu) uu.innerHTML='<option value="">Usuário: todos</option>'+users.map(u=>`<option>${u}</option>`).join('');
+    const aa=document.getElementById('lgAcao'); if(aa) aa.innerHTML='<option value="">Ação: todas</option>'+acoes.map(a=>`<option>${a}</option>`).join('');
+    ['lgUser','lgAcao','lgFrom','lgTo'].forEach(id=>{const e=document.getElementById(id); if(e) e.addEventListener('change',logsDraw);});
+    const bq=document.getElementById('lgBusca'); if(bq) bq.addEventListener('input',logsDraw);
+    logsDraw();
+  }).catch(e=>{
+    const tb=document.getElementById('lgList');
+    if(tb) tb.innerHTML='<tr><td colspan="6" style="padding:14px;color:#c0392b">Não foi possível carregar o registro: '+((e&&e.message)||e)+'</td></tr>';
+  });
+}
+function logsDraw(){
+  const rows=window._LOG_CACHE||[];
+  const gv=id=>{const e=document.getElementById(id);return e?e.value:'';};
+  const u=gv('lgUser'), a=gv('lgAcao'), f=gv('lgFrom'), t=gv('lgTo'), q=(gv('lgBusca')||'').toLowerCase();
+  const filt=rows.filter(r=>{
+    if(u&&r.nome!==u) return false;
+    if(a&&r.acao!==a) return false;
+    const day=(r.ts||'').slice(0,10);
+    if(f&&day<f) return false;
+    if(t&&day>t) return false;
+    if(q&&!(((r.nome||'')+' '+(r.email||'')+' '+(r.acao||'')+' '+(r.detalhe||'')+' '+(r.ac||'')).toLowerCase().includes(q))) return false;
+    return true;
+  });
+  const tb=document.getElementById('lgList'); if(!tb) return;
+  tb.innerHTML = filt.length? filt.map(r=>`<tr>
+    <td class="num" style="white-space:nowrap">${usuFmtData(r.ts)}</td>
+    <td>${(r.nome||r.email||'')}</td>
+    <td>${({admin:'Admin',editor:'Editor',leitor:'Leitor'})[r.papel]||(r.papel||'')}</td>
+    <td>${(r.acao||'')}</td>
+    <td class="cfbdesc">${(r.detalhe||'')}</td>
+    <td>${(r.ac||'')}</td></tr>`).join('') : '<tr><td colspan="6" style="padding:14px;color:#999">Nenhum registro para estes filtros.</td></tr>';
+  const c=document.getElementById('lgCount'); if(c) c.textContent=filt.length+' de '+rows.length+' registros.';
+}
+
 function usuRemover(uid){
   const u=(window._USU_CACHE||{})[uid]||{};
   if(uid===window.CURRENT_USER.uid){ toast('Você não pode remover a si mesmo'); return; }
   if(!window.confirm('Remover '+(u.nome||u.email||'este usuário')+' da lista?\n\nIsso revoga o acesso aos dados. Para apagar de vez a credencial de login, remova também em Firebase Console → Authentication → Users.')) return;
-  DB.collection('usuarios').doc(uid).delete().then(()=>{ toast('✔ Usuário removido'); renderUsuarios(); }).catch(e=>toast('⚠ '+(e.message||e)));
+  const _nome=u.nome||u.email||uid;
+  DB.collection('usuarios').doc(uid).delete().then(()=>{ toast('✔ Usuário removido'); if(typeof logAction==='function') logAction('Removeu usuário', _nome); renderUsuarios(); }).catch(e=>toast('⚠ '+(e.message||e)));
 }

@@ -37,5 +37,14 @@ service cloud.firestore {
       allow read:  if ativo();
       allow write: if editor();
     }
+
+    // ---- Registro de atividades (auditoria) ----
+    // cada usuário ativo grava SÓ ações como ele mesmo; leitura só admin; imutável.
+    match /logs/{id} {
+      allow create: if ativo() && request.resource.data.uid == request.auth.uid;
+      allow read:   if admin();
+      allow update: if false;
+      allow delete: if master();
+    }
   }
 }
