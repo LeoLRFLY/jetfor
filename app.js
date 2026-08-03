@@ -864,7 +864,7 @@ function iioHtml(){
 }
 function atvToolBtn(a){
   if(!a.tool) return '';
-  const map={confiab:{label:'▶ Abrir módulo de Confiabilidade',fn:'openConfiab()'}};
+  const map={confiab:{label:'▶ Abrir módulo de Confiabilidade',fn:'openConfiab(\'freq\')'}};
   const t=map[a.tool]; if(!t) return '';
   return `<div class="atvtool"><button class="btn p atvtoolbtn" onclick="event.stopPropagation();${t.fn}">${t.label}</button></div>`;
 }
@@ -1038,7 +1038,9 @@ function renderFreq(){
 const CONFIAB_ATA=[['21','Ar condicionado'],['22','Piloto automático'],['23','Comunicações'],['24','Elétrico'],['25','Equip./Interiores'],['26','Proteção contra fogo'],['27','Comandos de voo'],['28','Combustível'],['29','Hidráulico'],['30','Proteção gelo/chuva'],['31','Instrumentos'],['32','Trem de pouso'],['33','Luzes'],['34','Navegação'],['35','Oxigênio'],['36','Pneumático'],['49','APU'],['52','Portas'],['56','Janelas'],['71','Grupo motopropulsor'],['72','Motor'],['73','Combustível do motor'],['74','Ignição'],['77','Indicação do motor'],['79','Óleo'],['80','Partida']];
 const CONFIAB_TIPOS=['Reporte de piloto (PIREP)','Remoção não programada','Atraso / Cancelamento (mecânico)','Desligamento de motor em voo (IFSD)','Consumo de óleo','Pane / discrepância em manutenção','Outro'];
 
-function openConfiab(){
+let CONFIAB_FROM='freq';
+function openConfiab(from){
+  if(from) CONFIAB_FROM=from;
   ['inicio','freq','mapa','obrig','forms','geral','oficinas'].forEach(v=>{ const el=$('#view-'+v); if(el) el.style.display='none'; });
   document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
   const cv=$('#view-confiab'); if(cv) cv.style.display='';
@@ -1061,7 +1063,7 @@ function renderConfiab(){
   el.innerHTML=`
    <div class="cfbwrap">
      <div class="cfbhead">
-       <button class="btn o" onclick="switchView('freq')">← Voltar</button>
+       <button class="btn o" onclick="switchView(CONFIAB_FROM||'freq')">← Voltar</button>
        <div><div class="cfbtitle">📊 Módulo de Confiabilidade <span class="sasctag">SASC</span></div>
        <div class="cfbsub">MGM 5.6 · IS 120-016 — coleta e análise de dados de confiabilidade</div></div>
      </div>
@@ -1376,22 +1378,27 @@ function delAc(i){
 function renderForms(){
   const F=window.JETFOR_FORMS; if(!F) return;
   const el=$('#view-forms'); if(el.dataset.done) return;
-  const tabs=F.ordem.map((k,i)=>`<button class="subtab ${i===0?'active':''}" data-form="${k}">${esc(F.itens[k].label)}</button>`).join('');
-  const outros=F.outros.map(o=>`<a class="btn o sm" href="${o.url}" target="_blank" rel="noopener">${esc(o.nome)} ↗</a>`).join(' ');
-  el.innerHTML=`<div class="panel"><div class="pbody">
-    <div class="subtabs">${tabs}</div>
-    <div class="formactions no-print">
-      <button class="btn p sm" onclick="window.print()">🖨 Imprimir / Salvar PDF</button>
-      <a class="btn g sm" id="dlDocx" href="#" download>⬇ Baixar modelo .docx</a>
-      <span class="muted" style="font-size:11px">Preencha na tela e imprima/salve em PDF, ou baixe o modelo Word.</span>
+  const sideForms=F.ordem.map((k,i)=>`<button class="fsbtn ${i===0?'active':''}" data-form="${k}">${esc(F.itens[k].label)}</button>`).join('');
+  const modulos=`<button class="fsbtn mod" onclick="openConfiab('forms')">📊 Confiabilidade (SASC)</button>`;
+  const outros=(F.outros||[]).map(o=>`<a class="fsbtn link" href="${o.url}" target="_blank" rel="noopener">${esc(o.nome)} ↗</a>`).join('');
+  el.innerHTML=`<div class="formlayout">
+    <aside class="formside no-print">
+      <div class="fsgroup"><div class="fsgt">Formulários</div>${sideForms}</div>
+      <div class="fsgroup"><div class="fsgt">Módulos operacionais</div>${modulos}</div>
+      ${outros?`<div class="fsgroup"><div class="fsgt">Abrir no Drive</div>${outros}</div>`:''}
+    </aside>
+    <div class="formmain">
+      <div class="formactions no-print">
+        <button class="btn p sm" onclick="window.print()">🖨 Imprimir / Salvar PDF</button>
+        <a class="btn g sm" id="dlDocx" href="#" download>⬇ Baixar modelo .docx</a>
+        <span class="muted" style="font-size:11px">Preencha na tela e imprima/salve em PDF, ou baixe o modelo Word.</span>
+      </div>
+      <div id="formBody"></div>
     </div>
-    <div id="formBody"></div>
-    <div class="outros no-print"><b>Outros formulários (abrir no Drive):</b><div class="outros-links">${outros}</div>
-      <span class="muted" style="font-size:11px">Versões preenchíveis destes entram nas próximas etapas.</span></div>
-  </div></div>`;
+  </div>`;
   function show(k){
-    const it=F.itens[k];
-    el.querySelectorAll('.subtab').forEach(b=>b.classList.toggle('active',b.dataset.form===k));
+    const it=F.itens[k]; if(!it) return;
+    el.querySelectorAll('.fsbtn').forEach(b=>b.classList.toggle('active',b.dataset.form===k));
     $('#formBody').innerHTML=it.build();
     const dl=$('#dlDocx');
     if(it.docx){
@@ -1400,7 +1407,7 @@ function renderForms(){
       else { dl.target=''; dl.setAttribute('download',''); dl.textContent='⬇ Baixar modelo .docx'; }
     } else dl.style.display='none';
   }
-  el.querySelectorAll('.subtab').forEach(b=>b.addEventListener('click',()=>show(b.dataset.form)));
+  el.querySelectorAll('.fsbtn[data-form]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.form)));
   show(F.ordem[0]);
   el.dataset.done='1';
 }
