@@ -164,13 +164,45 @@
     </div>`;
   }
 
+  // ---------------- Comunicado de Atualização do MGM às Oficinas ----------------
+  function buildMgmOficinas(){
+    const ofs = (window.STATE && STATE.oficinas) ? STATE.oficinas : [];
+    let linhas;
+    if(ofs.length){
+      linhas = ofs.map(o=>`<tr>
+        <td>${(o.razao||'')}</td>
+        <td>${(o.cnpj||'')}</td>
+        <td>${(o.che||'')}</td>
+        <td>${(o.contato||'')}</td>
+        <td><input placeholder="__/__/____"></td>
+        <td><input></td></tr>`).join('');
+    } else {
+      linhas = rows(new Array(6).fill(0),6);
+    }
+    return `<div class="formdoc">
+      ${cabecalho("<b>Comunicado de Atualização do MGM às Oficinas Contratadas</b><br>RBAC 135 / 145 · distribuição controlada da revisão vigente do Manual Geral de Manutenção")}
+      <table class="ff"><tr><th>Nº do comunicado</th><td><input></td><th>Data de emissão</th><td><input placeholder="__/__/____"></td></tr>
+        <tr><th>Revisão do MGM</th><td><input placeholder="Ex.: Rev. 09.01"></td><th>Data de aprovação (ANAC)</th><td><input placeholder="__/__/____"></td></tr>
+        <tr><th>Referência do MGM</th><td colspan="3"><input placeholder="Código/identificação do manual e capítulos revisados"></td></tr></table>
+      <p class="fp">Prezados, comunicamos que o <b>Manual Geral de Manutenção (MGM)</b> da ${EMP} foi revisado e aprovado pela ANAC conforme dados acima. A partir desta data, todas as atividades de manutenção contratadas por esta empresa devem observar a <b>revisão vigente</b> do MGM. Solicitamos a confirmação de ciência desta organização de manutenção, mantendo este comunicado arquivado junto aos registros da contratante.</p>
+      <div class="fsec">Principais alterações desta revisão</div><textarea class="fta" rows="4"></textarea>
+      <div class="fsec">Oficinas destinatárias e confirmação de ciência</div>
+      <div class="tblwrap"><table class="ff grid"><tr>
+        <th>Razão social</th><th>CNPJ</th><th>Certificação / CHE nº</th><th>Contato / e-mail</th><th>Ciência em</th><th>Responsável (nome/assinatura)</th></tr>
+        ${linhas}</table></div>
+      <div class="fobs">A cópia controlada do MGM revisado segue anexa a este comunicado. A oficina deve devolver a confirmação de ciência devidamente preenchida. O controle das datas de envio por oficina também é mantido na aba <b>Oficinas</b> do sistema.</div>
+      ${assinatura()}
+    </div>`;
+  }
+
   window.JETFOR_FORMS = {
-    ordem: ["rds","rsi","rdp","desig","trip","vooteste"],
+    ordem: ["rds","rsi","rdp","desig","mgmof","trip","vooteste"],
     itens: {
       rds:  { label:"RDS — Dificuldade em Serviço (135.415)", docx:"formularios/JETFOR_Modelo_RDS_135415.docx", build:buildRDS },
       rsi:  { label:"RSI — Interrupção Mecânica (135.417)", docx:"formularios/JETFOR_Modelos_RSI_e_RDS.docx", build:buildRSI },
       rdp:  { label:"RDP — Discrepâncias Pendentes", docx:"https://drive.google.com/file/d/1UdVUO04yxhvYkhJA2N5nykbT_qpaAsRU/view", build:buildRDP },
       desig:{ label:"Designação de Inspetores", docx:"https://drive.google.com/file/d/14iJPbxtjxQ_vsJH3dDqGqfIWZRS2mSC0/view", build:buildDesig },
+      mgmof:{ label:"Atualização do MGM às Oficinas", build:buildMgmOficinas },
       trip: { label:"Lista de Tripulantes (135.429 d)", docx:"https://drive.google.com/file/d/1dsBxF-i36qqoKSaQeLROEoX7PqmL0emq/view", build:buildTrip },
       vooteste:{ label:"Voo de Teste (Vistoria)", docx:"https://drive.google.com/file/d/16VkNWSqm4FXzC0ziT4L4D9XmFI44_lBc/view", build:buildVooTeste }
     },
