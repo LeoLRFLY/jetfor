@@ -938,11 +938,19 @@ function renderInicio(){
   const D=window.JETFOR_DASH; if(!D) return;
   if(!STATE.frota) STATE.frota=D.fleet.map(x=>Object.assign({},x));
   const el=$('#view-inicio'); if(el.dataset.done){ drawFleet(); return; }
-  const ats=D.atividades;
   el.innerHTML=`
     <div class="kpis2" id="dashKpis"></div>
     <h2>Frota &amp; Enquadramento SASC</h2>
-    <div class="fleet" id="dashFleet"></div>
+    <div class="fleet" id="dashFleet"></div>`;
+  drawFleet();
+  el.dataset.done='1';
+}
+
+function renderFreq(){
+  const D=window.JETFOR_DASH; if(!D) return;
+  const el=$('#view-freq'); if(el.dataset.done) return;
+  const ats=D.atividades;
+  el.innerHTML=`
     <h2>Atividades &amp; Frequências</h2>
     ${D.modeloOperacional?`<div class="modelobox"><b>Modelo operacional:</b> ${esc(D.modeloOperacional)}</div>`:''}
     <div class="mantabs" id="dManTabs"></div>
@@ -955,7 +963,6 @@ function renderInicio(){
     <div class="tblwrap"><table class="dash"><thead><tr><th style="width:38%">Atividade</th><th>Frequência</th><th>Base</th><th>Escopo</th><th>Responsável</th></tr></thead><tbody id="dTb"></tbody></table></div>
     <div class="note" id="dCount"></div>
     <div class="note"><b>Como ler:</b> atividades <span class="tag g">Geral</span> valem para toda a frota; <span class="tag s">SASC</span> só para aeronaves 10+ assentos. <b>Responsável:</b> <span class="rtag jf">JetFor</span> = controle/administração feito internamente; <span class="rtag of">Oficina 145</span> = execução física por oficina contratada; <span class="rtag amb">JetFor + Oficina</span> = JetFor controla e a oficina executa. Clique numa linha para ver o "como fazer".</div>`;
-  drawFleet();
   // filtros atividades
   const freqs=[...new Set(ats.map(a=>a.freq))];
   $('#dFreq').innerHTML='<option value="">Frequência: todas</option>'+freqs.map(x=>`<option>${esc(x)}</option>`).join('');
@@ -1308,12 +1315,14 @@ function renderForms(){
 function switchView(v){
   document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   $('#view-inicio').style.display = v==='inicio'?'':'none';
+  $('#view-freq').style.display = v==='freq'?'':'none';
   $('#view-mapa').style.display = v==='mapa'?'':'none';
   $('#view-obrig').style.display = v==='obrig'?'':'none';
   $('#view-forms').style.display = v==='forms'?'':'none';
   $('#view-geral').style.display = v==='geral'?'':'none';
   $('#view-oficinas').style.display = v==='oficinas'?'':'none';
   if(v==='inicio') renderInicio();
+  if(v==='freq') renderFreq();
   if(v==='obrig') renderObrig();
   if(v==='forms') renderForms();
   if(v==='geral') renderDocsGeral();
