@@ -945,6 +945,7 @@ function renderInicio(){
     <div class="fleet" id="dashFleet"></div>
     <h2>Atividades &amp; Frequências</h2>
     ${D.modeloOperacional?`<div class="modelobox"><b>Modelo operacional:</b> ${esc(D.modeloOperacional)}</div>`:''}
+    <div class="mantabs" id="dManTabs"></div>
     <div class="filters">
       <select id="dEsc"><option value="">Escopo: todos</option><option value="Geral">Geral (toda a frota)</option><option value="SASC">Somente SASC</option></select>
       <select id="dResp"><option value="">Responsável: todos</option><option value="JetFor">JetFor (controle)</option><option value="Oficina 145">Oficina 145</option><option value="ambos">JetFor + Oficina</option></select>
@@ -958,6 +959,18 @@ function renderInicio(){
   // filtros atividades
   const freqs=[...new Set(ats.map(a=>a.freq))];
   $('#dFreq').innerHTML='<option value="">Frequência: todas</option>'+freqs.map(x=>`<option>${esc(x)}</option>`).join('');
+  const MAN_LBL={MGSO:'MGSO — Seg. Operacional',PTM:'PTM — Trein. Manutenção',PTO:'PTO — Trein. Operacional',MGO:'MGO — Ger. Operações'};
+  const mans=[...new Set(ats.map(a=>a.manual).filter(Boolean))];
+  // abas por manual (Todas · Base · MGSO · PTM · PTO · MGO)
+  let manFilter='';
+  const tabsDef=[['','Todas',ats.length],['__base','Base (MGM/RBAC)',ats.filter(a=>!a.manual).length]]
+    .concat(mans.map(m=>[m,m,ats.filter(a=>a.manual===m).length]));
+  $('#dManTabs').innerHTML=tabsDef.map(t=>`<button class="mantab${t[0]===''?' on':''}" data-man="${esc(t[0])}" title="${esc(MAN_LBL[t[0]]||'')}">${esc(t[1])} <span class="mtcount">${t[2]}</span></button>`).join('');
+  $('#dManTabs').querySelectorAll('.mantab').forEach(b=>b.addEventListener('click',()=>{
+    manFilter=b.dataset.man;
+    $('#dManTabs').querySelectorAll('.mantab').forEach(x=>x.classList.toggle('on',x===b));
+    draw();
+  }));
   function respTag(resp){
     if(!resp) return '';
     const jf=resp.includes('JetFor'), of=resp.includes('Oficina');
@@ -965,22 +978,24 @@ function renderInicio(){
     return `<span class="rtag ${cls}">${esc(resp)}</span>`;
   }
   function draw(){
-    const esc_=$('#dEsc').value, fq=$('#dFreq').value, rf=$('#dResp').value, q=($('#dBusca').value||'').toLowerCase();
+    const esc_=$('#dEsc').value, fq=$('#dFreq').value, rf=$('#dResp').value, mn=manFilter, q=($('#dBusca').value||'').toLowerCase();
     const rows=ats.filter(a=>{
       if(esc_&&a.escopo!==esc_) return false;
+      if(mn){ if(mn==='__base'){ if(a.manual) return false; } else if(a.manual!==mn) return false; }
       if(fq&&a.freq!==fq) return false;
       if(rf){
         if(rf==='ambos'){ if(!(a.resp&&a.resp.includes('JetFor')&&a.resp.includes('Oficina'))) return false; }
         else if(rf==='JetFor'){ if(a.resp!=='JetFor') return false; }
         else if(rf==='Oficina 145'){ if(a.resp!=='Oficina 145') return false; }
       }
-      if(q&&!(a.atv.toLowerCase().includes(q)||a.base.toLowerCase().includes(q)||(a.resp||'').toLowerCase().includes(q))) return false;
+      if(q&&!(a.atv.toLowerCase().includes(q)||a.base.toLowerCase().includes(q)||(a.resp||'').toLowerCase().includes(q)||(a.manual||'').toLowerCase().includes(q))) return false;
       return true;
     });
     $('#dTb').innerHTML=rows.map((a,i)=>{
       const temComo=!!a.como;
+      const manChip=a.manual?` <span class="manchip m${esc(a.manual)}">${esc(a.manual)}</span>`:'';
       return `<tr class="atvrow ${temComo?'expandable':''}" data-i="${i}">
-        <td><span class="caret">${temComo?'▸':''}</span>${esc(a.atv)}</td>
+        <td><span class="caret">${temComo?'▸':''}</span>${esc(a.atv)}${manChip}</td>
         <td class="freq">${esc(a.freq)}</td><td>${esc(a.base)}</td>
         <td><span class="tag ${a.escopo==='SASC'?'s':'g'}">${a.escopo}</span></td>
         <td>${respTag(a.resp)}</td></tr>
