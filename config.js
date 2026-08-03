@@ -23,3 +23,16 @@ window.FIREBASE_CONFIG = {
 // Nome da coleção e do documento no Firestore (pode manter assim)
 window.FIRESTORE_COLECAO = "mapas";
 window.FIRESTORE_DOC = "PT-LJQ";
+
+// ============================================================
+//  AUTENTICAÇÃO
+//  true  = exige login (tela de entrada, cadastro e recuperação).
+//  false = desliga o login e volta ao acesso direto (útil p/ testar).
+//  IMPORTANTE: para funcionar, habilite no Firebase Console →
+//  Authentication → Sign-in method → E-mail/senha.
+// ============================================================
+window.AUTH_ENABLED = true;
+// E-mail que entra já como administrador (aprovado automaticamente):
+window.JETFOR_ADMIN_EMAIL = "leo85filipe@gmail.com";
+// UID do administrador-mestre: sempre admin e ativo (à prova de bloqueio):
+window.JETFOR_ADMIN_UID = "l3Cnzaf42DRBK6MIHiXfnHxg2Rk2";

@@ -6,6 +6,7 @@
 // ---------- estado ----------
 let STATE = null;           // {aeronave, contadores, tarefas}
 let DB = null;              // firestore (se conectado)
+let AUTH = null;            // firebase auth (se ligado)
 let DOCREF = null;
 let ONLINE = false;
 let SUPPRESS = false;       // evita loop de escrita durante snapshot
@@ -110,18 +111,29 @@ function initFirebase(){
     firebase.initializeApp(cfg);
     DB = firebase.firestore();
     ONLINE = true; setBadge(true);
-    // dados gerais (frota/hoje)
-    acDoc('_geral').get().then(snap=>{
-      if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),updatedAt:new Date().toISOString()}); }
-      else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; if(d.docsGeral) STATE.docsGeral=d.docsGeral; if(d.docCatsGeral) STATE.docCatsGeral=d.docCatsGeral; if(Array.isArray(d.confiab)) STATE.confiab=d.confiab; if(d.frota){ STATE.frota=d.frota; if($('#view-inicio').dataset.done) drawFleet(); } if($('#view-geral') && $('#view-geral').style.display!=='none') renderDocsGeral(); const cv=$('#view-confiab'); if(cv && cv.style.display!=='none') renderConfiabList(); }
-    }).catch(()=>{});
-    acDoc('_oficinas').get().then(snap=>{
-      if(snap.exists){ const d=snap.data()||{}; if(d.oficinas){ STATE.oficinas=d.oficinas; if($('#view-oficinas').style.display!=='none') renderOficinas(); } }
-    }).catch(()=>{});
     initStorage();
-    seedAllAC();
-    subscribeAC(STATE.currentAC);
+    // Autenticação: se ligada, os dados só carregam após o login (ver auth.js)
+    if(window.AUTH_ENABLED && firebase.auth && typeof authInit==='function'){
+      AUTH = firebase.auth();
+      authInit();
+    } else {
+      loadCloudData();
+    }
   }catch(e){ console.error(e); ONLINE=false; setBadge(false); }
+}
+let _cloudLoaded=false;
+function loadCloudData(){
+  if(_cloudLoaded || !DB) return; _cloudLoaded=true;
+  // dados gerais (frota/hoje)
+  acDoc('_geral').get().then(snap=>{
+    if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),updatedAt:new Date().toISOString()}); }
+    else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; if(d.docsGeral) STATE.docsGeral=d.docsGeral; if(d.docCatsGeral) STATE.docCatsGeral=d.docCatsGeral; if(Array.isArray(d.confiab)) STATE.confiab=d.confiab; if(d.frota){ STATE.frota=d.frota; if($('#view-inicio').dataset.done) drawFleet(); } if($('#view-geral') && $('#view-geral').style.display!=='none') renderDocsGeral(); const cv=$('#view-confiab'); if(cv && cv.style.display!=='none') renderConfiabList(); }
+  }).catch(()=>{});
+  acDoc('_oficinas').get().then(snap=>{
+    if(snap.exists){ const d=snap.data()||{}; if(d.oficinas){ STATE.oficinas=d.oficinas; if($('#view-oficinas').style.display!=='none') renderOficinas(); } }
+  }).catch(()=>{});
+  seedAllAC();
+  subscribeAC(STATE.currentAC);
 }
 // grava no Firestore o doc completo de CADA aeronave que ainda não existe na nuvem
 function seedAllAC(){
@@ -1477,9 +1489,11 @@ function switchView(v){
   $('#view-forms').style.display = v==='forms'?'':'none';
   $('#view-geral').style.display = v==='geral'?'':'none';
   $('#view-oficinas').style.display = v==='oficinas'?'':'none';
+  { const vu=$('#view-usuarios'); if(vu) vu.style.display = v==='usuarios'?'':'none'; }
   if(v==='inicio') renderInicio();
   if(v==='freq') renderFreq();
   if(v==='sasc') renderSasc();
+  if(v==='usuarios' && typeof renderUsuarios==='function') renderUsuarios();
   if(v==='obrig') renderObrig();
   if(v==='forms') renderForms();
   if(v==='geral') renderDocsGeral();
@@ -1570,7 +1584,7 @@ function boot(){
   $('#fileImport').addEventListener('change',e=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=''; });
   $('#overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
-  document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
+  document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>{ if(b.id==='btnLogout'){ if(typeof authLogout==='function') authLogout(); return; } if(b.dataset.view) switchView(b.dataset.view); }));
   /* menu lateral: rail que expande no hover; 📌 fixa aberto (com memória) */
   try{ if(localStorage.getItem('jetfor_navpinned')==='1') document.body.classList.add('navpinned'); }catch(e){}
   const navTgl=$('#navToggle');

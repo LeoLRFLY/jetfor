@@ -70,6 +70,36 @@
   body.navpinned .sidenav .nl{display:inline}
   body.navpinned .navbtn,body.navpinned .navtoggle{justify-content:flex-start;gap:12px;padding-left:12px;padding-right:12px}
   body.navpinned .navbtn.active{border-left-color:var(--gold);background:rgba(255,255,255,.12)}
+  /* empurra o "Sair" para o rodapé do menu; item só de admin */
+  .navspacer{flex:1 1 auto;min-height:8px}
+  .adminonly{display:none}
+  body.isadmin .adminonly{display:flex}
+  .navlogout{color:#f0b8b0}
+  .navlogout:hover{color:#fff;background:rgba(192,57,43,.35)}
+  /* chip do usuário no header */
+  .userchip{display:inline-flex;flex-direction:column;align-items:flex-end;line-height:1.15;margin-right:4px}
+  .userchip .uname{font-size:12px;font-weight:700;color:#fff}
+  .userchip .urole{font-size:9.5px;color:#c7d2e6;text-transform:uppercase;letter-spacing:.4px}
+  /* ---- tela de login / cadastro ---- */
+  #authGate{position:fixed;inset:0;z-index:100;background:linear-gradient(135deg,#0f1f3d,#22406E);
+            display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto}
+  .authcard{background:#fff;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.35);width:100%;max-width:380px;padding:26px 26px 22px}
+  .authbrand{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .authbrand img{height:40px;width:auto}
+  .authbrand .ab1{font-size:17px;font-weight:800;color:var(--navy)}
+  .authbrand .ab2{font-size:11px;color:#6b7280}
+  .authcard h2{font-size:18px;color:var(--navy);margin:2px 0 12px}
+  .authcard label{display:block;font-size:12px;font-weight:600;color:var(--navy2);margin-bottom:10px}
+  .authcard label input{display:block;width:100%;margin-top:5px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font-size:14px}
+  .authcard label input:focus{outline:2px solid var(--gold);border-color:var(--gold)}
+  .authbtn{width:100%;padding:11px;font-size:14px;margin-top:4px}
+  .authlinks{display:flex;justify-content:space-between;gap:10px;margin-top:14px;font-size:12.5px}
+  .authlinks a{color:var(--navy2);text-decoration:none;font-weight:600}
+  .authlinks a:hover{text-decoration:underline}
+  .authnote{font-size:11.5px;color:#6b7280;line-height:1.45;margin-top:12px;background:#f4f7fc;border-radius:8px;padding:9px 11px}
+  .authmsg{font-size:12.5px;min-height:0;margin:0 0 8px;line-height:1.4}
+  .authmsg.err{color:#c0392b;background:#fceceb;border-radius:7px;padding:8px 10px}
+  .authmsg.ok{color:#1f8a4c;background:#e8f6ee;border-radius:7px;padding:8px 10px}
   /* ---- obrigações ---- */
   .lead{font-size:12.5px;color:var(--grey);line-height:1.5;margin:0 0 4px}
   .oktag{color:var(--ok);font-weight:700} .notag{color:var(--od);font-weight:700}
@@ -347,6 +377,7 @@
             border-bottom:3px solid transparent;justify-content:flex-start}
     .navbtn.active,.sidenav:hover .navbtn.active,body.navpinned .navbtn.active{border-left:none;border-bottom-color:var(--gold);background:rgba(255,255,255,.10)}
     .navbtn .ni{flex:0 0 auto}
+    .navspacer{display:none}
     .wrap{padding:10px}
     .panel h2{font-size:12px;padding:9px 12px}
     .pbody{padding:10px 12px}
@@ -511,6 +542,7 @@
     <div class="t2" id="acinfo">PT-LJQ</div>
   </div>
   <div class="spacer"></div>
+  <span class="userchip no-print" id="userChip" style="display:none"></span>
   <span class="badge off" id="connBadge">● Local</span>
   <button class="btn g no-print" id="btnSave">💾 Salvar</button>
   <button class="btn o no-print" id="btnExport">Exportar</button>
@@ -530,6 +562,9 @@
   <button class="navbtn" data-view="forms"><span class="ni">📝</span><span class="nl">Formulários</span></button>
   <button class="navbtn" data-view="oficinas"><span class="ni">🏭</span><span class="nl">Oficinas &amp; Auditorias</span></button>
   <button class="navbtn" data-view="geral"><span class="ni">📁</span><span class="nl">Pasta Geral</span></button>
+  <button class="navbtn adminonly" data-view="usuarios"><span class="ni">👥</span><span class="nl">Usuários</span></button>
+  <div class="navspacer"></div>
+  <button class="navbtn navlogout" id="btnLogout" title="Sair"><span class="ni">🚪</span><span class="nl">Sair</span></button>
 </nav>
 <main class="content" id="content">
 
@@ -612,8 +647,12 @@
 <div class="wrap" id="view-obrig" style="display:none"></div>
 
 <div class="wrap" id="view-forms" style="display:none"></div>
+<div class="wrap" id="view-usuarios" style="display:none"></div>
 </main>
 </div>
+
+<!-- TELA DE LOGIN / CADASTRO -->
+<div id="authGate" style="display:none"></div>
 
 <!-- EDIT MODAL -->
 <div class="overlay" id="overlay">
@@ -750,6 +789,7 @@
 
 <!-- Firebase (compat) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="config.js"></script>
@@ -764,6 +804,7 @@
 <script src="iio_data.js"></script>
 <script src="forms.js"></script>
 <script src="app.js"></script>
+<script src="auth.js"></script>
 <script src="docs.js"></script>
 <script src="auditorias.js"></script>
 <script>
