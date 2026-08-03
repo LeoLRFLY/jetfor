@@ -169,6 +169,29 @@
   .dashview .manchip.mPTM{background:#f3e7cf;color:#8a6a1e}
   .dashview .manchip.mPTO{background:#d8ecf6;color:#175a7a}
   .dashview .manchip.mMGO{background:#ecdcf6;color:#6a2f8a}
+  /* botão que leva ao módulo dentro do "como fazer" */
+  .dashview .atvtool{margin:8px 0 2px 20px}
+  .dashview .atvtoolbtn{font-size:12.5px}
+  /* ---- Módulo Confiabilidade ---- */
+  .cfbwrap{max-width:1100px;margin:0 auto}
+  .cfbhead{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+  .cfbtitle{font-size:18px;font-weight:800;color:var(--navy);display:flex;align-items:center;gap:8px}
+  .cfbsub{font-size:12px;color:#6b7280}
+  .sasctag{background:#fff2cc;color:#7A3B00;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+  .cfbnote{background:#eef4ff;border:1px solid #c9d8f2;border-left:4px solid var(--navy2);border-radius:8px;padding:10px 14px;font-size:12.5px;color:#33404f;line-height:1.5;margin:8px 0 14px}
+  .cfbcard{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(20,40,75,.06)}
+  .cfbcardt{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;border-bottom:2px solid var(--gold);padding-bottom:6px}
+  .cfbcount{color:#6b7280;font-weight:600;font-size:12px}
+  .cfbform{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+  .cfbform label{display:flex;flex-direction:column;font-size:11.5px;font-weight:600;color:var(--navy2);gap:4px}
+  .cfbform label.wide{grid-column:1/-1}
+  .cfbform input,.cfbform select,.cfbform textarea{padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-family:inherit}
+  .cfbform input:focus,.cfbform select:focus,.cfbform textarea:focus{outline:2px solid var(--gold);border-color:var(--gold)}
+  table.cfbtable{width:100%;border-collapse:collapse;font-size:12px}
+  table.cfbtable th{background:var(--navy2);color:#fff;text-align:left;padding:8px 10px;font-size:11px;font-weight:600;white-space:nowrap}
+  table.cfbtable td{padding:7px 10px;border-top:1px solid var(--line);vertical-align:top}
+  table.cfbtable tr:nth-child(even) td{background:#f7f9fc}
+  .cfbdesc{max-width:260px;white-space:normal;line-height:1.35;color:#4a5261}
   .dashview .note{font-size:12px;color:#6b7280;margin-top:14px;line-height:1.5}
   .dashview tr.expandable{cursor:pointer}
   .dashview tr.expandable:hover td{background:#eef4ff}
@@ -450,6 +473,7 @@
 
 <div class="wrap dashview" id="view-inicio"></div>
 <div class="wrap dashview" id="view-freq" style="display:none"></div>
+<div class="wrap" id="view-confiab" style="display:none"></div>
 <div class="wrap" id="view-geral" style="display:none"></div>
 <div class="wrap" id="view-oficinas" style="display:none"></div>
 

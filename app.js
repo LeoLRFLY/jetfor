@@ -80,7 +80,7 @@ function computeWith(task, CT, hoje){
 // STATE.acmaps = { 'PT-LJQ':{aeronave,contadores,tarefas,da}, ... }
 // STATE.contadores/tarefas apontam para a aeronave ativa (STATE.currentAC).
 function cur(){ return STATE.acmaps[STATE.currentAC]; }
-function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify({acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC,osProx:STATE.osProx,docsGeral:STATE.docsGeral,docCatsGeral:STATE.docCatsGeral,oficinas:STATE.oficinas})); }catch(e){} }
+function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify({acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC,osProx:STATE.osProx,docsGeral:STATE.docsGeral,docCatsGeral:STATE.docCatsGeral,oficinas:STATE.oficinas,confiab:STATE.confiab})); }catch(e){} }
 function loadLocal(){ try{ const s=localStorage.getItem('jetfor_mapa_v2'); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function acDoc(ac){ return DB.collection(window.FIRESTORE_COLECAO||'mapas').doc(ac); }
 
@@ -113,7 +113,7 @@ function initFirebase(){
     // dados gerais (frota/hoje)
     acDoc('_geral').get().then(snap=>{
       if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),updatedAt:new Date().toISOString()}); }
-      else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; if(d.docsGeral) STATE.docsGeral=d.docsGeral; if(d.docCatsGeral) STATE.docCatsGeral=d.docCatsGeral; if(d.frota){ STATE.frota=d.frota; if($('#view-inicio').dataset.done) drawFleet(); } if($('#view-geral') && $('#view-geral').style.display!=='none') renderDocsGeral(); }
+      else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; if(d.docsGeral) STATE.docsGeral=d.docsGeral; if(d.docCatsGeral) STATE.docCatsGeral=d.docCatsGeral; if(Array.isArray(d.confiab)) STATE.confiab=d.confiab; if(d.frota){ STATE.frota=d.frota; if($('#view-inicio').dataset.done) drawFleet(); } if($('#view-geral') && $('#view-geral').style.display!=='none') renderDocsGeral(); const cv=$('#view-confiab'); if(cv && cv.style.display!=='none') renderConfiabList(); }
     }).catch(()=>{});
     acDoc('_oficinas').get().then(snap=>{
       if(snap.exists){ const d=snap.data()||{}; if(d.oficinas){ STATE.oficinas=d.oficinas; if($('#view-oficinas').style.display!=='none') renderOficinas(); } }
@@ -862,10 +862,18 @@ function iioHtml(){
      I.viraIIO.map(x=>`<li>${esc(x)}</li>`).join('')+`</ul></div></div>`;
   return h;
 }
+function atvToolBtn(a){
+  if(!a.tool) return '';
+  const map={confiab:{label:'▶ Abrir módulo de Confiabilidade',fn:'openConfiab()'}};
+  const t=map[a.tool]; if(!t) return '';
+  return `<div class="atvtool"><button class="btn p atvtoolbtn" onclick="event.stopPropagation();${t.fn}">${t.label}</button></div>`;
+}
 function detalheAtiv(a){
-  if(/\bIIO\b/.test(a.atv) && window.JETFOR_IIO) return iioHtml();
-  if(a.comoHtml) return a.comoHtml;
-  return `<div class="comobox"><b>Como fazer:</b> ${esc(a.como||'—')}</div>`;
+  let h;
+  if(/\bIIO\b/.test(a.atv) && window.JETFOR_IIO) h=iioHtml();
+  else if(a.comoHtml) h=a.comoHtml;
+  else h=`<div class="comobox"><b>Como fazer:</b> ${esc(a.como||'—')}</div>`;
+  return h + atvToolBtn(a);
 }
 
 // ---------- INÍCIO (Dashboard da frota) ----------
@@ -1024,6 +1032,91 @@ function renderFreq(){
   $('#dBusca').addEventListener('input',draw);
   draw();
   el.dataset.done='1';
+}
+
+// ================= MÓDULO CONFIABILIDADE (SASC · MGM 5.6 / IS 120-016) =================
+const CONFIAB_ATA=[['21','Ar condicionado'],['22','Piloto automático'],['23','Comunicações'],['24','Elétrico'],['25','Equip./Interiores'],['26','Proteção contra fogo'],['27','Comandos de voo'],['28','Combustível'],['29','Hidráulico'],['30','Proteção gelo/chuva'],['31','Instrumentos'],['32','Trem de pouso'],['33','Luzes'],['34','Navegação'],['35','Oxigênio'],['36','Pneumático'],['49','APU'],['52','Portas'],['56','Janelas'],['71','Grupo motopropulsor'],['72','Motor'],['73','Combustível do motor'],['74','Ignição'],['77','Indicação do motor'],['79','Óleo'],['80','Partida']];
+const CONFIAB_TIPOS=['Reporte de piloto (PIREP)','Remoção não programada','Atraso / Cancelamento (mecânico)','Desligamento de motor em voo (IFSD)','Consumo de óleo','Pane / discrepância em manutenção','Outro'];
+
+function openConfiab(){
+  ['inicio','freq','mapa','obrig','forms','geral','oficinas'].forEach(v=>{ const el=$('#view-'+v); if(el) el.style.display='none'; });
+  document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
+  const cv=$('#view-confiab'); if(cv) cv.style.display='';
+  renderConfiab();
+  window.scrollTo(0,0);
+}
+function saveConfiab(){
+  saveLocal();
+  if(ONLINE && DB){
+    try{ SUPPRESS=true; acDoc('_geral').set({confiab:(STATE.confiab||[]),updatedAt:new Date().toISOString()},{merge:true}).then(()=>{SUPPRESS=false;}).catch(()=>{SUPPRESS=false;}); toast('✔ Confiabilidade salva na nuvem'); }
+    catch(e){ SUPPRESS=false; toast('⚠ Erro na nuvem — salvo local'); console.error(e); }
+  } else { toast('✔ Salvo neste navegador'); }
+}
+function renderConfiab(){
+  const el=$('#view-confiab'); if(!el) return;
+  const frota=(STATE.frota||[]);
+  const acOpts=frota.map(f=>`<option value="${esc(f.mat)}">${esc(f.mat)} — ${esc(f.modelo||'')}</option>`).join('');
+  const ataList=CONFIAB_ATA.map(x=>`<option value="${x[0]}">${x[0]} — ${esc(x[1])}</option>`).join('');
+  const tipoOpts=CONFIAB_TIPOS.map(t=>`<option>${esc(t)}</option>`).join('');
+  el.innerHTML=`
+   <div class="cfbwrap">
+     <div class="cfbhead">
+       <button class="btn o" onclick="switchView('freq')">← Voltar</button>
+       <div><div class="cfbtitle">📊 Módulo de Confiabilidade <span class="sasctag">SASC</span></div>
+       <div class="cfbsub">MGM 5.6 · IS 120-016 — coleta e análise de dados de confiabilidade</div></div>
+     </div>
+     <div class="cfbnote">Registre cada ocorrência (reporte de piloto, remoção não programada, atraso mecânico, IFSD, consumo de óleo…). Na próxima etapa o módulo vai calcular as taxas por ATA em janela de 12 meses e acender o painel de alerta automaticamente.</div>
+
+     <div class="cfbcard">
+       <div class="cfbcardt">Novo lançamento</div>
+       <div class="cfbform">
+         <label>Data<input type="date" id="cf_data" value="${todayISO()}"></label>
+         <label>Aeronave<select id="cf_ac">${acOpts}</select></label>
+         <label>Sistema (ATA)<select id="cf_ata"><option value="">—</option>${ataList}</select></label>
+         <label>Tipo de ocorrência<select id="cf_tipo">${tipoOpts}</select></label>
+         <label class="wide">Descrição<textarea id="cf_desc" rows="2" placeholder="O que aconteceu"></textarea></label>
+         <label>Horas (TSN) no momento<input type="number" id="cf_horas" step="0.1"></label>
+         <label>Ciclos<input type="number" id="cf_ciclos"></label>
+         <label>Pousos<input type="number" id="cf_pousos"></label>
+         <label>P/N<input type="text" id="cf_pn"></label>
+         <label>S/N<input type="text" id="cf_sn"></label>
+         <label class="wide">Ação tomada / status<textarea id="cf_acao" rows="2" placeholder="Investigação, ação corretiva, oficina responsável…"></textarea></label>
+       </div>
+       <div style="text-align:right;margin-top:8px"><button class="btn p" onclick="confiabAdd()">＋ Registrar ocorrência</button></div>
+     </div>
+
+     <div class="cfbcard">
+       <div class="cfbcardt">Ocorrências registradas <span id="cfbCount" class="cfbcount"></span></div>
+       <div class="tblwrap"><table class="cfbtable"><thead><tr><th>Data</th><th>Aeronave</th><th>ATA</th><th>Tipo</th><th>Descrição</th><th>Ação</th><th></th></tr></thead><tbody id="cfbList"></tbody></table></div>
+     </div>
+   </div>`;
+  renderConfiabList();
+}
+function renderConfiabList(){
+  const tb=$('#cfbList'); if(!tb) return;
+  const regs=(STATE.confiab||[]).slice().sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  const cc=$('#cfbCount'); if(cc) cc.textContent=regs.length?`(${regs.length})`:'';
+  tb.innerHTML = regs.length? regs.map(r=>`<tr>
+     <td class="num">${esc(r.data||'')}</td><td>${esc(r.ac||'')}</td><td>${esc(r.ata||'')}</td>
+     <td>${esc(r.tipo||'')}</td><td class="cfbdesc">${esc(r.desc||'')}</td><td class="cfbdesc">${esc(r.acao||'')}</td>
+     <td><button class="btn o sm" onclick="confiabDel('${r.id}')">🗑</button></td></tr>`).join('')
+    : '<tr><td colspan="7" style="color:#999;text-align:center;padding:14px">Nenhuma ocorrência registrada ainda.</td></tr>';
+}
+function confiabAdd(){
+  const g=id=>{const e=$('#'+id);return e?String(e.value).trim():'';};
+  const desc=g('cf_desc');
+  if(!desc){ toast('Descreva a ocorrência'); return; }
+  const reg={ id:'cf'+Date.now()+Math.floor(Math.random()*1000), data:g('cf_data'), ac:g('cf_ac'), ata:g('cf_ata'), tipo:g('cf_tipo'), desc:desc, horas:g('cf_horas'), ciclos:g('cf_ciclos'), pousos:g('cf_pousos'), pn:g('cf_pn'), sn:g('cf_sn'), acao:g('cf_acao'), criadoEm:new Date().toISOString() };
+  STATE.confiab=STATE.confiab||[]; STATE.confiab.push(reg);
+  saveConfiab();
+  ['cf_desc','cf_pn','cf_sn','cf_acao','cf_horas','cf_ciclos','cf_pousos'].forEach(id=>{const e=$('#'+id);if(e)e.value='';});
+  renderConfiabList();
+  toast('✔ Ocorrência registrada');
+}
+function confiabDel(id){
+  if(!window.confirm('Remover esta ocorrência?')) return;
+  STATE.confiab=(STATE.confiab||[]).filter(r=>r.id!==id);
+  saveConfiab(); renderConfiabList();
 }
 
 // ---------- Sub-abas do MAPA: DA & Boletins (por aeronave) ----------
@@ -1314,6 +1407,7 @@ function renderForms(){
 
 function switchView(v){
   document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
+  { const cv=$('#view-confiab'); if(cv) cv.style.display='none'; }
   $('#view-inicio').style.display = v==='inicio'?'':'none';
   $('#view-freq').style.display = v==='freq'?'':'none';
   $('#view-mapa').style.display = v==='mapa'?'':'none';
@@ -1352,7 +1446,8 @@ function boot(){
     osProx: (local&&local.osProx) || {},
     docsGeral: (local&&local.docsGeral) || [],
     docCatsGeral: (local&&local.docCatsGeral) || [],
-    oficinas: (local&&local.oficinas) || []
+    oficinas: (local&&local.oficinas) || [],
+    confiab: (local&&local.confiab) || []
   };
   migrateMapsFull();
   STATE.contadores=STATE.acmaps[currentAC].contadores; STATE.tarefas=STATE.acmaps[currentAC].tarefas;
