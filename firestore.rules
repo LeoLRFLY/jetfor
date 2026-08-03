@@ -21,8 +21,15 @@ service cloud.firestore {
                     && ( adminEmail() || master()
                          || (request.resource.data.papel == 'leitor'
                              && request.resource.data.ativo == false) );
-      // só admin altera papel / libera / bloqueia
-      allow update, delete: if admin();
+      // admin altera papel / libera / bloqueia / edita qualquer campo
+      // o próprio usuário pode atualizar SÓ campos não sensíveis (ex.: último acesso, nome):
+      // papel, ativo e email PRECISAM permanecer iguais → evita auto-promoção.
+      allow update: if admin()
+                    || ( request.auth.uid == uid
+                         && request.resource.data.papel == resource.data.papel
+                         && request.resource.data.ativo == resource.data.ativo
+                         && request.resource.data.email == resource.data.email );
+      allow delete: if admin();
     }
 
     // ---- Dados do app (frota, mapas, contadores, docs, confiabilidade…) ----
