@@ -38,29 +38,38 @@
   .badge.off{background:#3a4c6b;color:#dfe6f2}
   /* ---- panels ---- */
   .wrap{max-width:1500px;margin:0 auto;padding:14px}
-  /* ---- sidenav (menu lateral recolhível) ---- */
-  .shell{display:flex;align-items:flex-start}
-  .content{flex:1;min-width:0}
-  .sidenav{flex:0 0 236px;background:var(--navy2);position:sticky;top:54px;height:calc(100vh - 54px);
-           overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:2px;padding:8px;z-index:35;
-           box-shadow:2px 0 6px rgba(0,0,0,.10);transition:flex-basis .18s ease}
+  /* ---- sidenav (menu lateral: rail que expande no hover) ---- */
+  .shell{display:block}
+  .content{margin-left:58px;transition:margin-left .18s ease}
+  .sidenav{position:fixed;top:54px;left:0;height:calc(100vh - 54px);width:58px;background:var(--navy2);
+           overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:2px;padding:8px;z-index:38;
+           box-shadow:2px 0 6px rgba(0,0,0,.10);transition:width .18s ease}
   .navbtn{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:transparent;border:none;
           color:#c7d2e6;padding:11px 12px;font-size:13px;font-weight:600;cursor:pointer;border-radius:8px;
-          border-left:3px solid transparent;white-space:nowrap}
+          border-left:3px solid transparent;white-space:nowrap;overflow:hidden}
   .navbtn:hover{color:#fff;background:rgba(255,255,255,.08)}
   .navbtn.active{color:#fff;background:rgba(255,255,255,.12);border-left-color:var(--gold)}
   .navbtn .ni{font-size:17px;flex:0 0 22px;text-align:center}
   .navbtn .nl{overflow:hidden;text-overflow:ellipsis}
   .navtoggle{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:transparent;border:none;
-             color:#8ea3c4;padding:10px 12px;font-size:13px;font-weight:600;cursor:pointer;border-radius:8px;margin-bottom:4px;white-space:nowrap}
+             color:#8ea3c4;padding:10px 12px;font-size:13px;font-weight:600;cursor:pointer;border-radius:8px;margin-bottom:4px;white-space:nowrap;overflow:hidden}
   .navtoggle:hover{color:#fff;background:rgba(255,255,255,.06)}
   .navtoggle .ni{font-size:16px;flex:0 0 22px;text-align:center}
-  /* estado recolhido */
-  body.navcollapsed .sidenav{flex-basis:58px}
-  body.navcollapsed .sidenav .nl{display:none}
-  body.navcollapsed .navbtn,body.navcollapsed .navtoggle{justify-content:center;gap:0;padding-left:0;padding-right:0}
-  body.navcollapsed .navbtn{border-left-color:transparent}
-  body.navcollapsed .navbtn.active{border-left-color:transparent;background:rgba(255,255,255,.16)}
+  /* estado padrão = rail (só ícones) */
+  .sidenav .nl{display:none}
+  .navbtn,.navtoggle{justify-content:center;gap:0;padding-left:0;padding-right:0}
+  .navbtn.active{border-left-color:transparent;background:rgba(255,255,255,.16)}
+  /* expande ao passar o mouse (overlay, não empurra o conteúdo) */
+  .sidenav:hover{width:236px;box-shadow:6px 0 22px rgba(0,0,0,.30)}
+  .sidenav:hover .nl{display:inline}
+  .sidenav:hover .navbtn,.sidenav:hover .navtoggle{justify-content:flex-start;gap:12px;padding-left:12px;padding-right:12px}
+  .sidenav:hover .navbtn.active{border-left-color:var(--gold);background:rgba(255,255,255,.12)}
+  /* fixado (📌) = sempre expandido e empurrando o conteúdo */
+  body.navpinned .sidenav{width:236px;box-shadow:2px 0 6px rgba(0,0,0,.10)}
+  body.navpinned .content{margin-left:236px}
+  body.navpinned .sidenav .nl{display:inline}
+  body.navpinned .navbtn,body.navpinned .navtoggle{justify-content:flex-start;gap:12px;padding-left:12px;padding-right:12px}
+  body.navpinned .navbtn.active{border-left-color:var(--gold);background:rgba(255,255,255,.12)}
   /* ---- obrigações ---- */
   .lead{font-size:12.5px;color:var(--grey);line-height:1.5;margin:0 0 4px}
   .oktag{color:var(--ok);font-weight:700} .notag{color:var(--od);font-weight:700}
@@ -329,14 +338,14 @@
     header .t1{font-size:13px} header .t2{font-size:9.5px}
     header .spacer{flex:1 0 100%;display:block;height:0}
     header .badge{order:5} header .btn{padding:6px 9px;font-size:11px}
-    .shell{flex-direction:column}
-    .sidenav,body.navcollapsed .sidenav{position:static;height:auto;flex:none;width:100%;flex-basis:auto;flex-direction:row;
-            overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;gap:2px;padding:4px 6px}
+    .content,body.navpinned .content{margin-left:0}
+    .sidenav,.sidenav:hover,body.navpinned .sidenav{position:static;height:auto;width:100%;flex-direction:row;
+            overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;gap:2px;padding:4px 6px;box-shadow:0 2px 5px rgba(0,0,0,.12)}
     .navtoggle{display:none}
-    .sidenav .nl,body.navcollapsed .sidenav .nl{display:inline}
-    .navbtn,body.navcollapsed .navbtn{flex:0 0 auto;padding:9px 11px;font-size:12px;gap:7px;border-left:none;
+    .sidenav .nl,.sidenav:hover .nl,body.navpinned .sidenav .nl{display:inline}
+    .navbtn,.sidenav:hover .navbtn,body.navpinned .navbtn{flex:0 0 auto;padding:9px 11px;font-size:12px;gap:7px;border-left:none;
             border-bottom:3px solid transparent;justify-content:flex-start}
-    .navbtn.active,body.navcollapsed .navbtn.active{border-left:none;border-bottom-color:var(--gold);background:rgba(255,255,255,.10)}
+    .navbtn.active,.sidenav:hover .navbtn.active,body.navpinned .navbtn.active{border-left:none;border-bottom-color:var(--gold);background:rgba(255,255,255,.10)}
     .navbtn .ni{flex:0 0 auto}
     .wrap{padding:10px}
     .panel h2{font-size:12px;padding:9px 12px}
@@ -512,7 +521,7 @@
 
 <div class="shell">
 <nav class="sidenav no-print" id="sidenav">
-  <button class="navtoggle" id="navToggle" title="Recolher/expandir menu"><span class="ni">☰</span><span class="nl">Recolher</span></button>
+  <button class="navtoggle" id="navToggle" title="Fixar / soltar o menu"><span class="ni">📌</span><span class="nl">Fixar menu</span></button>
   <button class="navbtn active" data-view="inicio"><span class="ni">🏠</span><span class="nl">Início</span></button>
   <button class="navbtn" data-view="mapa"><span class="ni">🛠</span><span class="nl">Mapa de Manutenção</span></button>
   <button class="navbtn" data-view="freq"><span class="ni">📊</span><span class="nl">Atividades &amp; Frequências</span></button>

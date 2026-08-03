@@ -1571,10 +1571,10 @@ function boot(){
   $('#overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
   document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
-  /* recolher/expandir o menu lateral (com memória) */
-  try{ if(localStorage.getItem('jetfor_navcollapsed')==='1') document.body.classList.add('navcollapsed'); }catch(e){}
+  /* menu lateral: rail que expande no hover; 📌 fixa aberto (com memória) */
+  try{ if(localStorage.getItem('jetfor_navpinned')==='1') document.body.classList.add('navpinned'); }catch(e){}
   const navTgl=$('#navToggle');
-  if(navTgl) navTgl.addEventListener('click',()=>{ const c=document.body.classList.toggle('navcollapsed'); try{ localStorage.setItem('jetfor_navcollapsed', c?'1':'0'); }catch(e){} });
+  if(navTgl) navTgl.addEventListener('click',()=>{ const c=document.body.classList.toggle('navpinned'); try{ localStorage.setItem('jetfor_navpinned', c?'1':'0'); }catch(e){} });
   /* sub-abas do mapa são ligadas dinamicamente em buildMapaSubtabs() */
   $('#acOk').addEventListener('click',saveAcModal);
   $('#acCancel').addEventListener('click',closeAcModal);
