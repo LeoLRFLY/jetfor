@@ -1614,7 +1614,9 @@ function boot(){
   $('#fileImport').addEventListener('change',e=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=''; });
   $('#overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
-  document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>{ if(b.id==='btnLogout'){ if(typeof authLogout==='function') authLogout(); return; } if(b.dataset.view) switchView(b.dataset.view); }));
+  document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click',()=>{ document.body.classList.remove('navopen'); if(b.id==='btnLogout'){ if(typeof authLogout==='function') authLogout(); return; } if(b.dataset.view) switchView(b.dataset.view); }));
+  { const h=$('#navHamb'); if(h) h.addEventListener('click',()=>document.body.classList.toggle('navopen'));
+    const bk=$('#navBackdrop'); if(bk) bk.addEventListener('click',()=>document.body.classList.remove('navopen')); }
   /* menu lateral: rail que expande no hover; 📌 fixa aberto (com memória) */
   try{ if(localStorage.getItem('jetfor_navpinned')==='1') document.body.classList.add('navpinned'); }catch(e){}
   const navTgl=$('#navToggle');
