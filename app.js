@@ -1519,11 +1519,13 @@ function switchView(v){
   $('#view-oficinas').style.display = v==='oficinas'?'':'none';
   { const vu=$('#view-usuarios'); if(vu) vu.style.display = v==='usuarios'?'':'none'; }
   { const vl=$('#view-logs'); if(vl) vl.style.display = v==='logs'?'':'none'; }
+  { const vd=$('#view-detetive'); if(vd) vd.style.display = v==='detetive'?'':'none'; }
   if(v==='inicio') renderInicio();
   if(v==='freq') renderFreq();
   if(v==='sasc') renderSasc();
   if(v==='usuarios' && typeof renderUsuarios==='function') renderUsuarios();
   if(v==='logs' && typeof renderLogs==='function') renderLogs();
+  if(v==='detetive' && typeof renderDetetive==='function') renderDetetive();
   if(v==='obrig') renderObrig();
   if(v==='forms') renderForms();
   if(v==='geral') renderDocsGeral();

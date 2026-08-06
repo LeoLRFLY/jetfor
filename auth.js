@@ -129,7 +129,7 @@ function authInit(){
   if(!AUTH) return;
   authLoginForm(); // mostra o login enquanto verifica o estado
   AUTH.onAuthStateChanged(function(user){
-    if(!user){ window.CURRENT_USER=null; document.body.classList.remove('isadmin','authed'); authLoginForm(); return; }
+    if(!user){ window.CURRENT_USER=null; document.body.classList.remove('isadmin','authed','ismaster'); authLoginForm(); return; }
     // busca/gera o perfil do usuário
     const master=isMasterUid(user.uid);
     const ref=DB.collection('usuarios').doc(user.uid);
@@ -149,11 +149,12 @@ function authInit(){
       return p;
     }).then(perfil=>{
       if(!perfil){ return; }
-      if(perfil.ativo===false && !master){ window.CURRENT_USER=null; document.body.classList.remove('isadmin','authed'); authPendingScreen(user.email); return; }
+      if(perfil.ativo===false && !master){ window.CURRENT_USER=null; document.body.classList.remove('isadmin','authed','ismaster'); authPendingScreen(user.email); return; }
       // liberado
       window.CURRENT_USER={ uid:user.uid, email:(user.email||'').toLowerCase(), nome:perfil.nome||user.email, papel:perfil.papel||'leitor' };
       document.body.classList.add('authed');
       document.body.classList.toggle('isadmin', perfil.papel==='admin');
+      document.body.classList.toggle('ismaster', master);
       authUpdateHeader();
       authHideGate();
       // registra o último acesso (atualiza SÓ este campo; papel/ativo ficam iguais → seguro nas regras)
@@ -237,6 +238,99 @@ function usuResetSenha(uid){
   if(!window.confirm('Enviar e-mail de redefinição de senha para '+email+'?')) return;
   AUTH.sendPasswordResetEmail(email).then(()=>{ toast('✔ E-mail de redefinição enviado'); if(typeof logAction==='function') logAction('Enviou redefinição de senha', email); }).catch(e=>toast('⚠ '+authErrMsg(e.code)));
 }
+// ================= DETETIVE JETFOR (monitoramento — só o UID-mestre) =================
+function _detSensivel(acao){ return /Excluiu|Removeu|Bloqueou|Alterou papel|Importou/i.test(acao||''); }
+function renderDetetive(){
+  const el=document.getElementById('view-detetive'); if(!el) return;
+  if(!window.CURRENT_USER || !isMasterUid(window.CURRENT_USER.uid)){
+    el.innerHTML='<div class="cfbnote">Acesso restrito ao administrador-mestre.</div>'; return;
+  }
+  if(!el.dataset.done){
+    el.innerHTML=`<div class="dethead">
+        <div><div class="dettitle">🕵️ Detetive JetFor</div>
+        <div class="detsub">Monitoramento das atividades dos usuários — visão exclusiva do mestre.</div></div>
+        <div class="detctrl">
+          <select id="detPer"><option value="1">Hoje</option><option value="7" selected>Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="0">Tudo</option></select>
+          <select id="detUser"><option value="">Todos os usuários</option></select>
+          <button class="btn o sm" onclick="detReload()">↻ Atualizar</button>
+        </div>
+      </div>
+      <div id="detBody"><div class="cfbnote">Carregando atividades…</div></div>`;
+    el.dataset.done='1';
+    el.querySelectorAll('#detPer,#detUser').forEach(x=>x.addEventListener('change',detDraw));
+    // re-liga listeners após recriar selects em detReload via detDraw
+  }
+  detReload();
+}
+function detReload(){
+  const body=document.getElementById('detBody'); if(body) body.innerHTML='<div class="cfbnote">Carregando atividades…</div>';
+  Promise.all([
+    DB.collection('logs').orderBy('ts','desc').limit(3000).get(),
+    DB.collection('usuarios').get()
+  ]).then(([lg,us])=>{
+    const logs=[]; lg.forEach(d=>logs.push(d.data()));
+    const users=[]; us.forEach(d=>users.push(Object.assign({uid:d.id},d.data())));
+    window._DET_LOGS=logs; window._DET_USERS=users;
+    const sel=document.getElementById('detUser');
+    if(sel){ const cur=sel.value; const nomes=[...new Set(logs.map(l=>l.nome).filter(Boolean))].sort();
+      sel.innerHTML='<option value="">Todos os usuários</option>'+nomes.map(n=>`<option${n===cur?' selected':''}>${n}</option>`).join(''); }
+    detDraw();
+  }).catch(e=>{ const body=document.getElementById('detBody'); if(body) body.innerHTML='<div class="cfbnote" style="color:#c0392b">Não foi possível carregar: '+((e&&e.message)||e)+'</div>'; });
+}
+function detDraw(){
+  const body=document.getElementById('detBody'); if(!body) return;
+  const logs=window._DET_LOGS||[], users=window._DET_USERS||[];
+  const per=+((document.getElementById('detPer')||{}).value||7);
+  const uf=(document.getElementById('detUser')||{}).value||'';
+  // corte de período
+  let cut=null;
+  if(per>0){ const d=new Date(); d.setDate(d.getDate()-(per-1)); d.setHours(0,0,0,0); cut=d.toISOString(); }
+  let L=logs.filter(l=>{ if(cut && (l.ts||'')<cut) return false; if(uf && l.nome!==uf) return false; return true; });
+  // KPIs
+  const total=L.length;
+  const ativos=[...new Set(L.map(l=>l.uid).filter(Boolean))].length;
+  const cont={}; L.forEach(l=>{ cont[l.acao]=(cont[l.acao]||0)+1; });
+  const topAc=Object.keys(cont).sort((a,b)=>cont[b]-cont[a])[0]||'—';
+  const sens=L.filter(l=>_detSensivel(l.acao));
+  const kpis=[['Ações no período',total,''],['Usuários ativos',ativos,'sasc'],['Ação mais comum',topAc,''],['Ações sensíveis',sens.length,sens.length?'od':'ok']];
+  // por usuário
+  const byU={};
+  L.forEach(l=>{ const k=l.uid||l.nome; if(!byU[k]) byU[k]={nome:l.nome||l.email||'?',papel:l.papel||'',n:0,ult:'',cont:{}}; const u=byU[k]; u.n++; if((l.ts||'')>u.ult)u.ult=l.ts; u.cont[l.acao]=(u.cont[l.acao]||0)+1; if(l.papel)u.papel=l.papel; });
+  // inclui usuários sem atividade no período (do cadastro)
+  users.forEach(us=>{ const has=Object.values(byU).some(x=>x.nome===(us.nome||us.email)); if(!has && !uf){ byU['_'+us.uid]={nome:us.nome||us.email||'?',papel:us.papel||'',n:0,ult:us.ultimoAcesso||'',cont:{}}; } });
+  const rowsU=Object.values(byU).sort((a,b)=>b.n-a.n);
+  const maxN=Math.max(1,...rowsU.map(u=>u.n));
+  // ações por tipo
+  const tipos=Object.keys(cont).sort((a,b)=>cont[b]-cont[a]);
+  const maxT=Math.max(1,...tipos.map(t=>cont[t]));
+  const papelLbl=p=>({admin:'Admin',editor:'Editor',leitor:'Leitor'})[p]||p||'';
+
+  body.innerHTML=`
+    <div class="detkpis">${kpis.map(k=>`<div class="detkpi ${k[2]}"><div class="dn">${typeof k[1]==='number'?k[1]:esc(String(k[1]))}</div><div class="dl">${k[0]}</div></div>`).join('')}</div>
+
+    ${sens.length?`<div class="detcard det-alert"><div class="detct">⚠ Ações sensíveis no período (${sens.length})</div>
+      <div class="detfeed">${sens.slice(0,20).map(l=>`<div class="detrow"><span class="dt">${usuFmtData(l.ts)}</span><b>${esc(l.nome||'')}</b><span class="da">${esc(l.acao||'')}</span><span class="dd">${esc(l.detalhe||'')}</span></div>`).join('')}</div></div>`:''}
+
+    <div class="detgrid">
+      <div class="detcard"><div class="detct">Atividade por usuário</div>
+        <table class="cfbtable"><thead><tr><th>Usuário</th><th>Papel</th><th>Ações</th><th>Última atividade</th></tr></thead><tbody>
+        ${rowsU.map(u=>`<tr>
+          <td>${esc(u.nome)}</td><td>${papelLbl(u.papel)}</td>
+          <td style="min-width:120px"><div class="detbar"><span style="width:${Math.round(u.n/maxN*100)}%"></span></div><span class="detn">${u.n}</span></td>
+          <td class="num" style="white-space:nowrap">${u.ult?usuFmtData(u.ult):'<span style=\"color:#aab\">—</span>'}</td>
+        </tr>`).join('')||'<tr><td colspan="4" style="color:#999;padding:12px">Sem atividade no período.</td></tr>'}
+        </tbody></table>
+      </div>
+      <div class="detcard"><div class="detct">Ações por tipo</div>
+        ${tipos.length?tipos.map(t=>`<div class="dettipo"><span class="tl">${esc(t)}</span><div class="detbar"><span style="width:${Math.round(cont[t]/maxT*100)}%"></span></div><span class="detn">${cont[t]}</span></div>`).join(''):'<div style="color:#999;padding:8px">Sem ações no período.</div>'}
+      </div>
+    </div>
+
+    <div class="detcard"><div class="detct">Últimas atividades</div>
+      <div class="detfeed">${L.slice(0,60).map(l=>`<div class="detrow ${_detSensivel(l.acao)?'sens':''}"><span class="dt">${usuFmtData(l.ts)}</span><b>${esc(l.nome||'')}</b><span class="da">${esc(l.acao||'')}</span><span class="dd">${esc(l.detalhe||'')}${l.ac?' · '+esc(l.ac):''}</span></div>`).join('')||'<div style="color:#999;padding:8px">Nenhuma atividade.</div>'}</div>
+    </div>`;
+}
+
 // ---------- Registro de atividades (auditoria — só admin) ----------
 function renderLogs(){
   const el=document.getElementById('view-logs'); if(!el) return;
