@@ -126,6 +126,21 @@ function openOficinaDetalhe(idx){
       <td><input type="date" value="${esc(c.data||'')}" onchange="ofComprovSet(${idx},'${k}','data',this.value)" style="width:150px"></td>
       <td><input type="text" value="${esc(c.obs||'')}" placeholder="obs / nº" onchange="ofComprovSet(${idx},'${k}','obs',this.value)"></td>
     </tr>`; }).join('');
+  o.mgmEnvios=o.mgmEnvios||[];
+  const MGM_MEIOS=['E-mail','Físico','Entrega em mãos','Outro'];
+  const mgmList=o.mgmEnvios.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  const mgmRows = mgmList.length ? mgmList.map(function(m){ const i=o.mgmEnvios.indexOf(m);
+    const meioOpts=MGM_MEIOS.map(x=>`<option ${m.meio===x?'selected':''}>${x}</option>`).join('');
+    return `<tr>
+      <td><input value="${esc(m.numero||'')}" placeholder="nº" style="width:64px" onchange="ofMgmSet(${idx},${i},'numero',this.value)"></td>
+      <td><input type="date" value="${esc(m.data||'')}" onchange="ofMgmSet(${idx},${i},'data',this.value)"></td>
+      <td><input value="${esc(m.revisao||'')}" placeholder="Rev. 09.01" style="width:96px" onchange="ofMgmSet(${idx},${i},'revisao',this.value)"></td>
+      <td><select onchange="ofMgmSet(${idx},${i},'meio',this.value)">${meioOpts}</select></td>
+      <td><input type="date" value="${esc(m.cienciaData||'')}" onchange="ofMgmSet(${idx},${i},'cienciaData',this.value)"></td>
+      <td><input value="${esc(m.responsavel||'')}" placeholder="quem recebeu" onchange="ofMgmSet(${idx},${i},'responsavel',this.value)"></td>
+      <td><input value="${esc(m.obs||'')}" placeholder="obs" onchange="ofMgmSet(${idx},${i},'obs',this.value)"></td>
+      <td class="no-print"><button class="btn o sm" onclick="ofMgmDel(${idx},${i})">🗑</button></td></tr>`;
+  }).join('') : '<tr><td colspan="8" style="color:#999;padding:10px">Nenhum envio de MGM registrado.</td></tr>';
   const auds=(o.auditorias||[]).slice().sort((a,b)=>(b.data||'').localeCompare(a.data||''));
   let audHtml;
   if(!auds.length){ audHtml='<p class="lead muted">Nenhuma auditoria registrada.</p>'; }
@@ -147,12 +162,13 @@ function openOficinaDetalhe(idx){
       <button class="btn g sm no-print" style="margin-bottom:8px" onclick="abrirAuditoria(${idx},null)">➕ Nova auditoria (F-SASC-02)</button>
       ${audHtml}
     </div>
-    <div class="detcard"><div class="detct">Envio do MGM &amp; comprovantes</div>
-      <div class="ofmgm">
-        <label>Data de envio do MGM<input type="date" value="${esc(o.dataEnvioMGM||'')}" onchange="ofField(${idx},'dataEnvioMGM',this.value)"></label>
-        <label>Revisão do MGM enviada<input type="text" value="${esc(o.mgmVersao||'')}" placeholder="ex.: Rev. 09" onchange="ofField(${idx},'mgmVersao',this.value)"></label>
+    <div class="detcard"><div class="detct">Envios de MGM à oficina</div>
+      <div class="cfbnote">Registre cada envio da revisão vigente do MGM a esta oficina e a confirmação de ciência dela — mesmo modelo do "Comunicado de Atualização do MGM às Oficinas".</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <button class="btn g sm no-print" onclick="ofMgmAdd(${idx})">➕ Registrar envio de MGM</button>
+        <button class="btn o sm no-print" onclick="if(typeof openFormItem==='function')openFormItem('mgmof')">🖨 Gerar comunicado (formulário)</button>
       </div>
-      <table class="cfbtable" style="margin-top:8px"><thead><tr><th>Comprovante exigido</th><th>Validade / data</th><th>Obs</th></tr></thead><tbody>${cpRows}</tbody></table>
+      <div class="tblwrap"><table class="cfbtable"><thead><tr><th>Nº</th><th>Data de envio</th><th>Revisão</th><th>Meio</th><th>Ciência da oficina</th><th>Responsável</th><th>Obs</th><th class="no-print"></th></tr></thead><tbody>${mgmRows}</tbody></table></div>
     </div>
   </div>`;
   $('#view-oficinas').innerHTML=h;
@@ -161,6 +177,10 @@ function openOficinaDetalhe(idx){
 function ofField(idx,k,v){ const o=oficinas()[idx]; if(!o)return; o[k]=v; saveAll(); if(typeof logAction==='function') logAction('Atualizou oficina', (o.razao||'')+' · '+k); }
 function ofToggleAeronave(idx,mat,on){ const o=oficinas()[idx]; if(!o)return; o.aeronaves=o.aeronaves||[]; const i=o.aeronaves.indexOf(mat); if(on && i<0)o.aeronaves.push(mat); if(!on && i>=0)o.aeronaves.splice(i,1); saveAll(); const frota=(STATE.frota||[]); const nS=frota.filter(f=>f.sasc&&o.aeronaves.includes(f.mat)).length; const nN=frota.filter(f=>!f.sasc&&o.aeronaves.includes(f.mat)).length; const el=document.getElementById('ofAcResumo'); if(el)el.textContent='('+nS+' SASC · '+nN+' não-SASC)'; }
 function ofComprovSet(idx,k,field,v){ const o=oficinas()[idx]; if(!o)return; const cp=ofComprov(o); cp[k]=cp[k]||{}; cp[k][field]=v; saveAll(); }
+function ofMgmSync(o){ const ult=(o.mgmEnvios||[]).map(m=>m.data).filter(Boolean).sort().pop(); o.dataEnvioMGM=ult||''; const ur=(o.mgmEnvios||[]).slice().sort((a,b)=>(a.data||'').localeCompare(b.data||'')).pop(); if(ur&&ur.revisao) o.mgmVersao=ur.revisao; }
+function ofMgmAdd(idx){ const o=oficinas()[idx]; if(!o)return; o.mgmEnvios=o.mgmEnvios||[]; o.mgmEnvios.push({data:(STATE.hoje||todayISO()),meio:'E-mail'}); ofMgmSync(o); saveAll(); if(typeof logAction==='function') logAction('Registrou envio de MGM à oficina', o.razao||''); openOficinaDetalhe(idx); }
+function ofMgmSet(idx,i,field,v){ const o=oficinas()[idx]; if(!o||!o.mgmEnvios||!o.mgmEnvios[i])return; o.mgmEnvios[i][field]=v; ofMgmSync(o); saveAll(); }
+function ofMgmDel(idx,i){ const o=oficinas()[idx]; if(!o||!o.mgmEnvios)return; if(!confirm('Remover este envio de MGM?'))return; o.mgmEnvios.splice(i,1); ofMgmSync(o); saveAll(); openOficinaDetalhe(idx); }
 
 /* ---------------- Lista de auditorias de uma oficina ---------------- */
 function renderAuditoriasList(ofIdx){
