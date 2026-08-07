@@ -28,6 +28,7 @@ function addMonthsISO(iso, months){
 
 /* ---------------- Cadastro de oficinas ---------------- */
 function renderOficinas(){
+  OF_DETALHE=null;
   const list = oficinas();
   let h = `<div class="panel"><h2><span class="tag">🏭</span> Oficinas &amp; Auditorias — RBAC 145 (MGM 5.6)</h2><div class="pbody">`;
   h += `<p class="lead">Cadastro de oficinas contratadas e registro de auditorias (formulário F-SASC-02). A JetFor programa, audita e exige os comprovantes; a execução física é das oficinas 145.</p>`;
@@ -40,16 +41,18 @@ function renderOficinas(){
       const prox = o.ultimaAuditoria ? addMonthsISO(o.ultimaAuditoria,12) : '';
       const vencida = prox && prox < (STATE.hoje||todayISO());
       const stCls = o.status==='Aprovado'?'s':(o.status==='Reprovado'?'r':(o.status?'w':'n'));
-      h += `<div class="ofcard">
+      const nAc=(o.aeronaves||[]).length;
+      h += `<div class="ofcard clik" data-ofopen="${i}">
         <div class="ofcard-top"><div class="ofrz">${esc(o.razao||'(sem nome)')}</div>
-          <div class="no-print"><button class="acbtn" data-ofedit="${i}" title="Editar">✎</button><button class="acbtn del" data-ofdel="${i}" title="Remover">🗑</button></div></div>
+          <div class="no-print"><button class="acbtn" data-ofedit="${i}" title="Editar dados">✎</button><button class="acbtn del" data-ofdel="${i}" title="Remover">🗑</button></div></div>
         <div class="row"><b>CNPJ:</b> ${esc(o.cnpj||'—')} · <b>CHE:</b> ${esc(o.che||'—')}</div>
         <div class="row"><b>Modelos:</b> ${esc(o.modelos||'—')}</div>
         <div class="row"><b>Contato:</b> ${esc(o.contato||'—')}</div>
+        <div class="row"><b>Aeronaves atendidas:</b> ${nAc?nAc:'—'}</div>
         <div class="row"><b>Última auditoria:</b> ${o.ultimaAuditoria?fmtDate(new Date(o.ultimaAuditoria+'T00:00:00')):'—'} ${prox?`· <b>próxima:</b> <span class="${vencida?'disp-neg':''}">${fmtDate(new Date(prox+'T00:00:00'))}</span>`:''}</div>
         <div class="row"><b>Envio do MGM:</b> ${o.dataEnvioMGM?fmtDate(new Date(o.dataEnvioMGM+'T00:00:00')):'—'}</div>
         ${o.status?`<span class="badge ${stCls}">${esc(o.status)}</span>`:'<span class="badge n">Sem auditoria</span>'}
-        <div class="verMapa no-print" data-ofaud="${i}">Auditorias (${nAud}) →</div>
+        <div class="verMapa no-print" data-ofopen="${i}">Gerenciar oficina · Auditorias (${nAud}) →</div>
       </div>`;
     });
     h += `</div>`;
@@ -57,9 +60,9 @@ function renderOficinas(){
   h += `</div></div><div id="ofAudPanel"></div>`;
   $('#view-oficinas').innerHTML = h;
   const add = $('#ofAdd'); if(add) add.addEventListener('click',()=>openOficinaModal(null));
-  $('#view-oficinas').querySelectorAll('[data-ofedit]').forEach(b=>b.addEventListener('click',()=>openOficinaModal(+b.dataset.ofedit)));
-  $('#view-oficinas').querySelectorAll('[data-ofdel]').forEach(b=>b.addEventListener('click',()=>excluirOficina(+b.dataset.ofdel)));
-  $('#view-oficinas').querySelectorAll('[data-ofaud]').forEach(b=>b.addEventListener('click',()=>renderAuditoriasList(+b.dataset.ofaud)));
+  $('#view-oficinas').querySelectorAll('[data-ofedit]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openOficinaModal(+b.dataset.ofedit);}));
+  $('#view-oficinas').querySelectorAll('[data-ofdel]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();excluirOficina(+b.dataset.ofdel);}));
+  $('#view-oficinas').querySelectorAll('[data-ofopen]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openOficinaDetalhe(+b.dataset.ofopen);}));
 }
 
 function openOficinaModal(idx){
@@ -91,6 +94,74 @@ function excluirOficina(idx){
   oficinas().splice(idx,1); saveAll(); renderOficinas(); toast('🗑 Oficina removida');
 }
 
+/* ---------------- Página de gestão da oficina ---------------- */
+var OF_DETALHE=null;
+const OF_COMPROV=[
+  ['che145','Certificado RBAC 145 vigente (CHE)'],
+  ['capac','Lista de capacidade / habilitações'],
+  ['calib','Certificados de calibração de ferramentas'],
+  ['pessoal','Relação de pessoal / inspetores IIO'],
+  ['mgm','MGM recebido e de acordo pela oficina'],
+  ['seguro','Apólice de seguro vigente']
+];
+function ofComprov(o){ o.comprovantes=o.comprovantes||{}; return o.comprovantes; }
+function openOficinaDetalhe(idx){
+  const o=oficinas()[idx]; if(!o){ renderOficinas(); return; }
+  OF_DETALHE=idx; o.aeronaves=o.aeronaves||[];
+  const frota=(STATE.frota||[]);
+  const nS=frota.filter(f=>f.sasc && o.aeronaves.includes(f.mat)).length;
+  const nN=frota.filter(f=>!f.sasc && o.aeronaves.includes(f.mat)).length;
+  const prox = o.ultimaAuditoria ? addMonthsISO(o.ultimaAuditoria,12) : '';
+  const vencida = prox && prox < (STATE.hoje||todayISO());
+  const stCls = o.status==='Aprovado'?'s':(o.status==='Reprovado'?'r':(o.status?'w':'n'));
+  const acRows=frota.map(f=>{
+    const ch=o.aeronaves.includes(f.mat)?'checked':'';
+    const tag=f.sasc?'<span class="basetag" style="background:#e2efda;color:#2E7D32">SASC</span>':'<span class="basetag na">não-SASC</span>';
+    return `<label class="ofac"><input type="checkbox" ${ch} onchange="ofToggleAeronave(${idx},'${esc(f.mat)}',this.checked)"> <b>${esc(f.mat)}</b> <span class="muted">${esc(f.modelo||'')}</span> ${tag}</label>`;
+  }).join('') || '<span class="muted">Nenhuma aeronave na frota.</span>';
+  const cp=ofComprov(o);
+  const cpRows=OF_COMPROV.map(function(it){ const k=it[0],lbl=it[1]; const c=cp[k]||{};
+    return `<tr>
+      <td><label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" ${c.ok?'checked':''} onchange="ofComprovSet(${idx},'${k}','ok',this.checked)"> ${esc(lbl)}</label></td>
+      <td><input type="date" value="${esc(c.data||'')}" onchange="ofComprovSet(${idx},'${k}','data',this.value)" style="width:150px"></td>
+      <td><input type="text" value="${esc(c.obs||'')}" placeholder="obs / nº" onchange="ofComprovSet(${idx},'${k}','obs',this.value)"></td>
+    </tr>`; }).join('');
+  const auds=(o.auditorias||[]).slice().sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  let audHtml;
+  if(!auds.length){ audHtml='<p class="lead muted">Nenhuma auditoria registrada.</p>'; }
+  else { audHtml='<div class="tblwrap"><table class="da"><thead><tr><th>Nº</th><th>Data</th><th>Tipo</th><th>Resultado</th><th>NCs</th><th class="num no-print">Ações</th></tr></thead><tbody>'+
+    auds.map(function(a){ const i=o.auditorias.indexOf(a); return `<tr><td><b>${esc(a.numero||'—')}</b></td><td>${a.data?fmtDate(new Date(a.data+'T00:00:00')):'—'}</td><td>${esc(a.tipo||'—')}</td><td>${esc(a.resultado||'—')}</td><td>${(a.ncs||[]).filter(n=>n.desc).length}</td><td class="num no-print"><button class="btn o sm" onclick="abrirAuditoria(${idx},${i})">Abrir</button> <button class="btn o sm" onclick="excluirAuditoria(${idx},${i})">🗑</button></td></tr>`; }).join('')+
+    '</tbody></table></div>'; }
+  const h=`<div class="ofdet">
+    <div class="dethead"><button class="btn o no-print" onclick="renderOficinas()">← Voltar</button>
+      <div><div class="dettitle">🏭 ${esc(o.razao||'(sem nome)')}</div>
+      <div class="detsub">CNPJ ${esc(o.cnpj||'—')} · CHE ${esc(o.che||'—')} · ${esc(o.contato||'—')}${o.status?` · <span class="badge ${stCls}">${esc(o.status)}</span>`:''}
+        <button class="btn o sm no-print" style="margin-left:8px" onclick="openOficinaModal(${idx})">✎ Editar dados</button></div></div>
+    </div>
+    <div class="detcard"><div class="detct">Aeronaves atendidas <span class="cfbcount" id="ofAcResumo">(${nS} SASC · ${nN} não-SASC)</span></div>
+      <div class="cfbnote">Marque quais aeronaves da frota esta oficina atende. As <b>SASC</b> (10+ assentos) exigem o programa de auditoria e comprovantes; as <b>não-SASC</b> ficam fora do SASC, mas a JetFor mantém o controle.</div>
+      <div class="ofaclist">${acRows}</div>
+    </div>
+    <div class="detcard"><div class="detct">Programa de auditoria (F-SASC-02)</div>
+      <div class="cfbnote">Última: <b>${o.ultimaAuditoria?fmtDate(new Date(o.ultimaAuditoria+'T00:00:00')):'—'}</b>${prox?` · próxima: <b class="${vencida?'disp-neg':''}">${fmtDate(new Date(prox+'T00:00:00'))}</b>${vencida?' (vencida)':''}`:''} · anual, obrigatória p/ escopo SASC.</div>
+      <button class="btn g sm no-print" style="margin-bottom:8px" onclick="abrirAuditoria(${idx},null)">➕ Nova auditoria (F-SASC-02)</button>
+      ${audHtml}
+    </div>
+    <div class="detcard"><div class="detct">Envio do MGM &amp; comprovantes</div>
+      <div class="ofmgm">
+        <label>Data de envio do MGM<input type="date" value="${esc(o.dataEnvioMGM||'')}" onchange="ofField(${idx},'dataEnvioMGM',this.value)"></label>
+        <label>Revisão do MGM enviada<input type="text" value="${esc(o.mgmVersao||'')}" placeholder="ex.: Rev. 09" onchange="ofField(${idx},'mgmVersao',this.value)"></label>
+      </div>
+      <table class="cfbtable" style="margin-top:8px"><thead><tr><th>Comprovante exigido</th><th>Validade / data</th><th>Obs</th></tr></thead><tbody>${cpRows}</tbody></table>
+    </div>
+  </div>`;
+  $('#view-oficinas').innerHTML=h;
+  window.scrollTo(0,0);
+}
+function ofField(idx,k,v){ const o=oficinas()[idx]; if(!o)return; o[k]=v; saveAll(); if(typeof logAction==='function') logAction('Atualizou oficina', (o.razao||'')+' · '+k); }
+function ofToggleAeronave(idx,mat,on){ const o=oficinas()[idx]; if(!o)return; o.aeronaves=o.aeronaves||[]; const i=o.aeronaves.indexOf(mat); if(on && i<0)o.aeronaves.push(mat); if(!on && i>=0)o.aeronaves.splice(i,1); saveAll(); const frota=(STATE.frota||[]); const nS=frota.filter(f=>f.sasc&&o.aeronaves.includes(f.mat)).length; const nN=frota.filter(f=>!f.sasc&&o.aeronaves.includes(f.mat)).length; const el=document.getElementById('ofAcResumo'); if(el)el.textContent='('+nS+' SASC · '+nN+' não-SASC)'; }
+function ofComprovSet(idx,k,field,v){ const o=oficinas()[idx]; if(!o)return; const cp=ofComprov(o); cp[k]=cp[k]||{}; cp[k][field]=v; saveAll(); }
+
 /* ---------------- Lista de auditorias de uma oficina ---------------- */
 function renderAuditoriasList(ofIdx){
   const o = oficinas()[ofIdx]; if(!o) return;
@@ -121,7 +192,9 @@ function excluirAuditoria(ofIdx,audIdx){
   // recomputa status/última pela mais recente
   const ult=o.auditorias.slice().sort((x,y)=>(x.data||'').localeCompare(y.data||'')).pop();
   o.ultimaAuditoria=ult?ult.data:''; o.status=ult?ult.resultado:'';
-  saveAll(); renderOficinas(); renderAuditoriasList(ofIdx); toast('🗑 Auditoria removida');
+  saveAll();
+  if(OF_DETALHE!=null){ openOficinaDetalhe(ofIdx); } else { renderOficinas(); renderAuditoriasList(ofIdx); }
+  toast('🗑 Auditoria removida');
 }
 
 /* ---------------- Formulário de auditoria (F-SASC-02) ---------------- */
@@ -210,7 +283,8 @@ function salvarAuditoria(){
   const ult=o.auditorias.slice().sort((x,y)=>(x.data||'').localeCompare(y.data||'')).pop();
   o.ultimaAuditoria=ult?ult.data:''; o.status=ult?ult.resultado:'';
   saveAll(); toast('✔ Auditoria '+(d.numero||'')+' salva'); closeAud();
-  renderOficinas(); renderAuditoriasList(AUDCTX.of);
+  if(typeof logAction==='function') logAction('Registrou auditoria de oficina', (o.razao||'')+' · '+(d.numero||'')+(d.resultado?' · '+d.resultado:''));
+  if(OF_DETALHE!=null){ openOficinaDetalhe(AUDCTX.of); } else { renderOficinas(); renderAuditoriasList(AUDCTX.of); }
 }
 function closeAud(){ $('#audOverlay').classList.remove('show'); document.body.classList.remove('audopen'); audSetPageOrient(false); AUDCTX.aud=-1; }
 function audSetPageOrient(on){
