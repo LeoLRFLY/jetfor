@@ -834,32 +834,42 @@ function renderAll(){ renderCounters(); fillGroupFilters(); renderTable(); }
 // ---------- OBRIGAÇÕES MGM (seção referência) ----------
 function renderObrig(){
   const F=window.JETFOR_FREQ; if(!F) return;
-  const el=$('#view-obrig'); if(el.dataset.done) return;
+  const el=$('#view-obrig');
   const yn = v => v==='SIM' ? '<span class="badge2 sim">SIM</span>' : v==='NÃO' ? '<span class="badge2 nao">NÃO</span>' : esc(v);
   const mk = v => (v==='✓') ? '<td class="c yes">✓</td>' : '<td class="c no">–</td>';
+  // frota REAL (nunca mais desatualiza): usa STATE.frota / JETFOR_DASH.fleet
+  const fleet=(STATE&&STATE.frota&&STATE.frota.length)?STATE.frota:((window.JETFOR_DASH&&window.JETFOR_DASH.fleet)||[]);
+  const enqShort = e => (e||'').replace('135.411','')||'—';
+  const sascMats = fleet.filter(f=>f.sasc).map(f=>f.mat).join(', ')||'—';
 
   // 1) Frota e enquadramento
   let frota = `<div class="panel"><h2><span class="tag">1</span> Frota e enquadramento SASC</h2><div class="pbody">
     <p class="lead">Classificação pela configuração de assentos certificada no TCDS (10+ assentos, excluindo piloto ⇒ RBAC 135.411(a)(2) ⇒ entra no SASC/PMAC).</p>
     <div class="tblwrap"><table class="ref"><thead><tr>${F.frotaHead.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>`;
-  F.frota.forEach(r=>{ frota+=`<tr>${r.map((c,i)=> i===5?`<td>${yn(c)}</td>`:`<td>${esc(c)}</td>`).join('')}</tr>`; });
+  fleet.forEach(f=>{
+    const row=[f.mat||'—', f.modelo||'—', f.tcds||'a levantar', f.assentos||'—', enqShort(f.enq), f.sasc?'SIM':'NÃO', f.sasc?'Aprovado (PMAC)':'Fabricante', f.obs||''];
+    frota+=`<tr>${row.map((c,i)=> i===5?`<td>${yn(c)}</td>`:`<td>${esc(c)}</td>`).join('')}</tr>`;
+  });
   frota+=`</tbody></table></div></div></div>`;
 
-  // 2) Atividades e frequências (matriz por aeronave)
-  const acCols=F.aircraft.map(a=>`<th style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;font-size:10px">${esc(a)}</th>`).join('');
-  function ativBlock(title,rows){
-    let h=`<tr class="subhdr"><td colspan="${5+F.aircraft.length}">${title}</td></tr>`;
-    rows.forEach(r=>{ h+=`<tr><td class="c">${esc(r.n)}</td><td>${esc(r.atividade)}</td><td>${esc(r.freq)}</td>`+
-      `<td>${esc(r.base)}</td><td>${esc(r.aplic)}</td>${r.marks.map(mk).join('')}</tr>`; });
+  // 2) Atividades e frequências (matriz por aeronave) — marcações calculadas pela frota real
+  const acCols=fleet.map(f=>`<th style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;font-size:10px">${esc(f.mat||'')}</th>`).join('');
+  function ativBlock(title,rows,scope){
+    let h=`<tr class="subhdr"><td colspan="${5+fleet.length}">${title}</td></tr>`;
+    rows.forEach(r=>{
+      const marks=fleet.map(f=> (scope==='geral' || f.sasc) ? '✓' : '–');
+      h+=`<tr><td class="c">${esc(r.n)}</td><td>${esc(r.atividade)}</td><td>${esc(r.freq)}</td>`+
+        `<td>${esc(r.base)}</td><td>${esc(r.aplic)}</td>${marks.map(mk).join('')}</tr>`;
+    });
     return h;
   }
   let ativ=`<div class="panel"><h2><span class="tag">2</span> Atividades e frequências — por aeronave</h2><div class="pbody">
-    <p class="lead">Atividades gerais valem para toda a frota. As atividades do PMAC/SASC valem só para a frota SASC (10+ assentos): PR-ARN, Citation 550 e S550 (em inclusão).</p>
+    <p class="lead">Atividades gerais valem para toda a frota. As do PMAC/SASC valem só para a frota SASC (10+ assentos): <b>${esc(sascMats)}</b>.</p>
     <div class="tblwrap"><table class="ref matrix"><thead><tr>
       <th>Nº</th><th>Atividade</th><th>Frequência</th><th>Base normativa</th><th>Aplicabilidade</th>${acCols}
     </tr></thead><tbody>`;
-  ativ+=ativBlock('ATIVIDADES GERAIS — TODA A FROTA',F.gerais);
-  ativ+=ativBlock('ATIVIDADES SOMENTE DA FROTA SASC (10+ assentos)',F.sasc);
+  ativ+=ativBlock('ATIVIDADES GERAIS — TODA A FROTA',F.gerais,'geral');
+  ativ+=ativBlock('ATIVIDADES SOMENTE DA FROTA SASC (10+ assentos)',F.sasc,'sasc');
   ativ+=`</tbody></table></div></div></div>`;
 
   // 3) Aplicabilidade MGM (10 elementos PMAC)
@@ -1174,7 +1184,7 @@ const SASC_ITEMS=[
       <div class="sasccard" onclick="switchView('oficinas')"><div class="si">🔍</div><div><b>Auditorias SASC</b><div class="sd">F-SASC-02 · oficinas e fornecedores.</div></div></div>
       <div class="sasccard" onclick="sascShow('iio')"><div class="si">✅</div><div><b>IIO</b><div class="sd">Itens de Inspeção Obrigatória.</div></div></div>
     </div>
-    <div class="cfbnote" style="background:#f7f9fc;border-left-color:var(--gold)">A frota SASC hoje: <b>PR-ARN</b> (B200GT) e os <b>Citation</b> (PR-FHN / PT-LJQ) em inclusão. Veja a matriz completa na aba <a href="#" onclick="switchView('obrig');return false">Obrigações MGM (SASC / PMAC)</a>.</div>`},
+    <div class="cfbnote" style="background:#f7f9fc;border-left-color:var(--gold)">A frota SASC hoje: <b>${((STATE&&STATE.frota)||[]).filter(f=>f.sasc).map(f=>esc(f.mat+(f.modelo?' ('+f.modelo+')':''))).join(', ')||'—'}</b>. Veja a matriz completa na aba <a href="#" onclick="switchView('obrig');return false">Obrigações MGM (SASC / PMAC)</a>.</div>`},
   {key:'confiab', label:'📊 Confiabilidade', launch:()=>openConfiab('sasc')},
   {key:'comite', label:'🗓 Comitê SASC & Atas', html:()=>`
     <div class="cfbcardt">Comitê SASC & Atas (F-SASC-01)</div>
