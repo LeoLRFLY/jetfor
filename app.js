@@ -104,7 +104,7 @@ async function saveAll(){
     try{
       SUPPRESS=true;
       const m=cur();
-      await acDoc(STATE.currentAC).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),docs:(m.docs||[]),docCatsExtra:(m.docCatsExtra||[]),grupos:(m.grupos||[]),updatedAt:new Date().toISOString()});
+      await acDoc(STATE.currentAC).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),docs:(m.docs||[]),docCatsExtra:(m.docCatsExtra||[]),grupos:(m.grupos||[]),baixas:(m.baixas||[]),updatedAt:new Date().toISOString()});
       await acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),docCatsGeral:(STATE.docCatsGeral||[]),updatedAt:new Date().toISOString()});
       await acDoc('_oficinas').set({oficinas:(STATE.oficinas||[]),updatedAt:new Date().toISOString()});
       SUPPRESS=false;
@@ -187,6 +187,7 @@ function subscribeAC(ac){
     if(d.docs) m.docs=d.docs;
     if(d.docCatsExtra) m.docCatsExtra=d.docCatsExtra;
     if(d.grupos) m.grupos=d.grupos;
+    if(d.baixas) m.baixas=d.baixas;
     migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac);
     if(ac===STATE.currentAC){ STATE.contadores=m.contadores; STATE.tarefas=m.tarefas; renderCounters(); renderTable(); }
   });
@@ -384,40 +385,53 @@ function updateOSsel(){
   if(bx){ $('#baixaCount').textContent=n; bx.style.display = n>0 ? '' : 'none'; }
 }
 // ---------- DAR BAIXA EM MASSA ----------
-function openBaixa(){
+function _lbKey(){ return 'jetfor_lastbaixa_'+(STATE.currentAC||''); }
+function getLastBaixa(){ try{ const s=localStorage.getItem(_lbKey()); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function setLastBaixa(o){ try{ localStorage.setItem(_lbKey(), JSON.stringify(o)); }catch(e){} }
+function openBaixa(fresh){
   const ids=selectedIds(); if(!ids.length){ toast('Selecione tarefas'); return; }
   const groups=buildCounterGroups();
   const hoje=STATE.hoje||todayISO();
+  const last = fresh ? null : getLastBaixa();
   let rd='';
   groups.forEach(g=>{
     rd+=`<div class="bxgroup"><div class="ctitle"><span class="dot" style="background:${g.dot}"></span>${g.title}</div><div class="bxfields">`;
-    g.fields.forEach(([k,lab])=>{ const v=STATE.contadores[k]!=null?STATE.contadores[k]:''; rd+=`<label class="bxfield">${lab}<input type="number" step="any" data-bx="${k}" value="${v}"></label>`; });
+    g.fields.forEach(([k,lab])=>{ const atual=STATE.contadores[k]!=null?STATE.contadores[k]:''; const v=(last&&last.readings&&last.readings[k]!=null&&last.readings[k]!=='')?last.readings[k]:atual; rd+=`<label class="bxfield">${lab}<input type="number" step="any" data-bx="${k}" value="${v}"></label>`; });
     rd+='</div></div>';
   });
+  const hint = last ? `<div class="cfbnote" style="margin:0 0 10px"><b>↻ Reaproveitando a última baixa desta aeronave</b>${last.data?' — '+fmtDate(new Date(last.data+'T00:00:00')):''}${last.ref?' · '+esc(last.ref):''}. Confira e aplique (ideal para quando esqueceu um item). <a href="#" onclick="openBaixa(true);return false">Limpar e começar do zero</a></div>` : '';
   $('#baixaBody').innerHTML=`
+    ${hint}
     <p class="lead"><b>${ids.length}</b> tarefa(s) selecionada(s). Informe a data e as leituras dos contadores no momento da execução — cada tarefa recebe a leitura correspondente à sua base e o VENC/DISP é recalculado.</p>
-    <table class="ff"><tr><th>Data da execução</th><td><input type="date" id="bxData" value="${hoje}" style="width:150px"></td>
-      <th>Oficina executante</th><td><input id="bxRef" placeholder="Ex.: USA - Uirapuru (vai p/ Observações)"></td></tr></table>
+    <table class="ff"><tr><th>Data da execução</th><td><input type="date" id="bxData" value="${last&&last.data?last.data:hoje}" style="width:150px"></td>
+      <th>Oficina executante</th><td><input id="bxRef" value="${last&&last.ref?esc(last.ref):''}" placeholder="Ex.: USA - Uirapuru (vai p/ Observações)"></td></tr></table>
     <div class="fsec">Leituras dos contadores na execução</div>
     <div class="bxgrid">${rd}</div>`;
   $('#baixaOverlay').classList.add('show');
 }
 function closeBaixa(){ $('#baixaOverlay').classList.remove('show'); }
-function aplicarBaixa(){
-  const ids=selectedIds(); if(!ids.length){ closeBaixa(); return; }
-  const root=$('#baixaBody');
-  const dEl=root.querySelector('#bxData'); const data=(dEl?dEl.value.trim():'')||todayISO();
-  const ref=(root.querySelector('#bxRef')||{}).value||'';
-  const readings={}; root.querySelectorAll('[data-bx]').forEach(i=>{ readings[i.dataset.bx]=num(i.value); });
-  const m=cur(); let n=0, skip=0;
+function _baixaApply(ids,data,ref,readings){
+  const m=cur(); let n=0, skip=0; const tarefas=[];
   ids.forEach(id=>{
     const t=m.tarefas.find(x=>x.id===id); if(!t) return;
     let upd=false, leitura=null;
     if(t.base && t.base!=='calendario' && t.intervalo!=null && readings[t.base]!=null){ t.exec=readings[t.base]; leitura=readings[t.base]; upd=true; }
     if(t.cal){ t.cal.exec=data; upd=true; }
     if(ref){ t.obs=ref; }   // oficina executante vai para o campo Observações
-    if(upd){ t.hist=t.hist||[]; t.hist.push({data:data, oficina:ref||'', leitura:leitura, base:t.base, cal:!!t.cal}); n++; } else skip++;
+    if(upd){ t.hist=t.hist||[]; t.hist.push({data:data, oficina:ref||'', leitura:leitura, base:t.base, cal:!!t.cal}); n++; tarefas.push({id:t.id,nome:t.nome,base:t.base,leitura:leitura}); } else skip++;
   });
+  return {n,skip,tarefas};
+}
+function aplicarBaixa(){
+  const ids=selectedIds(); if(!ids.length){ closeBaixa(); return; }
+  const root=$('#baixaBody');
+  const dEl=root.querySelector('#bxData'); const data=(dEl?dEl.value.trim():'')||todayISO();
+  const ref=(root.querySelector('#bxRef')||{}).value||'';
+  const readings={}; root.querySelectorAll('[data-bx]').forEach(i=>{ readings[i.dataset.bx]=num(i.value); });
+  const m=cur();
+  const res=_baixaApply(ids,data,ref,readings); const n=res.n, skip=res.skip;
+  if(res.n>0){ m.baixas=m.baixas||[]; m.baixas.push({ id:'bx'+Date.now().toString(36), data:data, ref:ref, readings:readings, tarefas:res.tarefas, criadoEm:new Date().toISOString(), por:(window.CURRENT_USER&&window.CURRENT_USER.nome)||'' }); }
+  setLastBaixa({data:data, ref:ref, readings:readings});
   saveAll(); renderTable();
   toast('✔ Baixa aplicada em '+n+' tarefa(s)'+(skip?' ('+skip+' sem intervalo/calendário — não alteradas)':''));
   logAction('Deu baixa em tarefas', n+' tarefa(s) · '+STATE.currentAC+(ref?' · '+ref:''));
@@ -580,6 +594,92 @@ function renderHistoricoOS(){
   $('#mapa-sheet').querySelectorAll('[data-open]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); abrirOS(+b.dataset.open); }));
   $('#mapa-sheet').querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); excluirOS(+b.dataset.del); }));
   $('#mapa-sheet').querySelectorAll('.osrow').forEach(r=>r.addEventListener('click',()=>abrirOS(+r.dataset.i)));
+}
+// ---------- Registro de Baixas (rastreabilidade) ----------
+function renderBaixas(){
+  const bx=(cur().baixas)||[];
+  let h=`<div class="panel"><h2><span class="tag" style="background:#16a34a">Baixas</span> Registro de baixas — ${esc(STATE.currentAC)}</h2><div class="pbody">`;
+  h+=`<p class="lead">Cada baixa em massa fica registrada aqui para rastreabilidade. Clique em um registro para ver os detalhes e, se preciso, <b>indicar mais tarefas</b> que foram executadas junto (mesma data/oficina/leituras) sem redigitar tudo.</p>`;
+  if(!bx.length){ h+='<p class="lead">Nenhuma baixa registrada ainda para esta aeronave.</p>'; }
+  else{
+    h+=`<div class="tblwrap"><table class="da"><thead><tr><th>Data</th><th>Oficina</th><th class="num">Tarefas</th><th>Registrado por</th><th class="num">Ações</th></tr></thead><tbody>`;
+    bx.map((o,i)=>({o,i})).reverse().forEach(({o,i})=>{
+      const dstr=o.data?fmtDate(new Date(o.data+'T00:00:00')):'—';
+      const qtd=(o.tarefas&&o.tarefas.length)||0;
+      h+=`<tr class="bxrow" data-i="${i}" style="cursor:pointer"><td><b>${dstr}</b></td><td>${esc(o.ref||'—')}</td><td class="num">${qtd}</td><td>${esc(o.por||'—')}</td><td class="num" style="white-space:nowrap"><button class="btn o sm" data-bxopen="${i}">Abrir</button> <button class="btn o sm" data-bxdel="${i}" title="excluir registro">🗑</button></td></tr>`;
+    });
+    h+=`</tbody></table></div>`;
+  }
+  h+=`</div></div>`;
+  $('#mapa-sheet').innerHTML=h;
+  $('#mapa-sheet').querySelectorAll('[data-bxopen]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); renderBaixaDetalhe(+b.dataset.bxopen); }));
+  $('#mapa-sheet').querySelectorAll('[data-bxdel]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); baixaDel(+b.dataset.bxdel); }));
+  $('#mapa-sheet').querySelectorAll('.bxrow').forEach(r=>r.addEventListener('click',()=>renderBaixaDetalhe(+r.dataset.i)));
+}
+function baixaDel(i){
+  const bx=(cur().baixas)||[]; const o=bx[i]; if(!o) return;
+  if(!confirm('Excluir este registro de baixa? As tarefas já baixadas NÃO são revertidas — apenas o histórico deste registro é removido.')) return;
+  bx.splice(i,1); cur().baixas=bx; saveAll();
+  logAction('Excluiu registro de baixa', STATE.currentAC+(o.data?' · '+o.data:''));
+  renderBaixas();
+}
+function renderBaixaDetalhe(i){
+  const bx=(cur().baixas)||[]; const o=bx[i]; if(!o){ renderBaixas(); return; }
+  const dstr=o.data?fmtDate(new Date(o.data+'T00:00:00')):'—';
+  const rd=o.readings||{};
+  const rk=Object.keys(rd).filter(k=>rd[k]!=null&&rd[k]!=='');
+  let leit = rk.length ? rk.map(k=>`<span class="pill" style="background:#e2e8f0;color:#334155">${esc(k)}: <b>${esc(String(rd[k]))}</b></span>`).join(' ') : '<i>somente calendário</i>';
+  let h=`<div class="panel"><h2><span class="tag" style="background:#16a34a">Baixa</span> ${dstr}${o.ref?' · '+esc(o.ref):''}</h2><div class="pbody">`;
+  h+=`<p><a href="#" id="bxBack">← voltar ao registro de baixas</a></p>`;
+  h+=`<table class="ff"><tr><th>Data</th><td>${dstr}</td><th>Oficina</th><td>${esc(o.ref||'—')}</td></tr>`;
+  h+=`<tr><th>Registrado por</th><td>${esc(o.por||'—')}</td><th>Em</th><td>${o.criadoEm?fmtDate(new Date(o.criadoEm)):'—'}</td></tr>`;
+  h+=`<tr><th>Leituras</th><td colspan="3">${leit}</td></tr></table>`;
+  const ts=(o.tarefas||[]);
+  h+=`<div class="fsec">Tarefas baixadas neste registro (${ts.length})</div>`;
+  if(!ts.length){ h+='<p class="lead">Nenhuma tarefa listada.</p>'; }
+  else{
+    h+=`<div class="tblwrap"><table class="da"><thead><tr><th>Tarefa</th><th>Base</th><th class="num">Leitura</th></tr></thead><tbody>`;
+    ts.forEach(t=>{ h+=`<tr><td>${esc(t.nome||t.id)}</td><td>${esc(t.base||'—')}</td><td class="num">${t.leitura!=null?esc(String(t.leitura)):'—'}</td></tr>`; });
+    h+=`</tbody></table></div>`;
+  }
+  // picker de tarefas para indicar mais itens ao mesmo registro
+  const m=cur();
+  const jaIds={}; ts.forEach(t=>jaIds[t.id]=1);
+  const cand=(m.tarefas||[]).filter(t=>!jaIds[t.id]);
+  h+=`<div class="fsec">Indicar mais tarefas a este registro</div>`;
+  h+=`<p class="lead">Marque tarefas que foram executadas junto (mesma data, oficina e leituras). Elas recebem baixa e entram neste registro — sem redigitar.</p>`;
+  h+=`<input id="bxPickSearch" placeholder="🔎 filtrar por nome, base ou grupo…" style="width:100%;max-width:420px;margin:0 0 8px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px">`;
+  h+=`<div id="bxPickList" style="max-height:320px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;padding:6px">`;
+  cand.forEach(t=>{
+    const grp=t.grupo||''; const base=t.base||'';
+    h+=`<label class="bxpickrow" data-txt="${esc(((t.nome||'')+' '+base+' '+grp).toLowerCase())}" style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-bottom:1px solid #f1f5f9;cursor:pointer"><input type="checkbox" class="bxpick" value="${esc(t.id)}"><span style="flex:1">${esc(t.nome||t.id)}</span><span class="pill" style="background:#e2e8f0;color:#334155">${esc(base||'cal')}</span></label>`;
+  });
+  if(!cand.length) h+='<p class="lead" style="margin:6px">Todas as tarefas desta aeronave já constam neste registro.</p>';
+  h+=`</div>`;
+  h+=`<div style="margin-top:10px"><button class="btn p" id="bxApplyExtras">✅ Aplicar baixa nas tarefas marcadas</button> <span id="bxPickCount" class="muted"></span></div>`;
+  h+=`</div></div>`;
+  $('#mapa-sheet').innerHTML=h;
+  $('#bxBack').addEventListener('click',e=>{ e.preventDefault(); renderBaixas(); });
+  const srch=$('#bxPickSearch'), list=$('#bxPickList');
+  function upd(){ const n=list.querySelectorAll('.bxpick:checked').length; $('#bxPickCount').textContent=n?(n+' marcada(s)'):''; }
+  if(srch) srch.addEventListener('input',()=>{ const q=srch.value.trim().toLowerCase(); list.querySelectorAll('.bxpickrow').forEach(r=>{ r.style.display=(!q||r.dataset.txt.indexOf(q)>=0)?'flex':'none'; }); });
+  list.querySelectorAll('.bxpick').forEach(c=>c.addEventListener('change',upd));
+  $('#bxApplyExtras').addEventListener('click',()=>baixaAplicarExtras(i));
+}
+function baixaAplicarExtras(i){
+  const bx=(cur().baixas)||[]; const o=bx[i]; if(!o){ renderBaixas(); return; }
+  const ids=Array.from($('#mapa-sheet').querySelectorAll('.bxpick:checked')).map(c=>c.value);
+  if(!ids.length){ toast('Marque ao menos uma tarefa'); return; }
+  const res=_baixaApply(ids, o.data, o.ref||'', o.readings||{});
+  if(res.n>0){
+    o.tarefas=(o.tarefas||[]).concat(res.tarefas);
+    saveAll(); renderTable();
+    toast('✔ '+res.n+' tarefa(s) adicionada(s) a esta baixa'+(res.skip?' ('+res.skip+' sem intervalo/calendário)':''));
+    logAction('Indicou mais tarefas a uma baixa', res.n+' tarefa(s) · '+STATE.currentAC+(o.ref?' · '+o.ref:''));
+  } else {
+    toast('Nenhuma tarefa alterada (sem intervalo/calendário aplicável)');
+  }
+  renderBaixaDetalhe(i);
 }
 function baseTagClass(base){
   if(base&&base.startsWith('motor1')) return 'm1';
@@ -1478,6 +1578,7 @@ function selectMapaSubtab(k){
   if(k==='mapa'){ $('#mapa-main').style.display=''; $('#mapa-sheet').style.display='none'; }
   else if(k==='ica'){ $('#mapa-main').style.display='none'; renderICA(); $('#mapa-sheet').style.display=''; }
   else if(k==='hist'){ $('#mapa-main').style.display='none'; renderHistoricoOS(); $('#mapa-sheet').style.display=''; }
+  else if(k==='baixas'){ $('#mapa-main').style.display='none'; renderBaixas(); $('#mapa-sheet').style.display=''; }
   else if(k==='docs'){ $('#mapa-main').style.display='none'; renderDocs(STATE.currentAC); $('#mapa-sheet').style.display=''; }
   else { $('#mapa-main').style.display='none'; renderMapaSheet(k); $('#mapa-sheet').style.display=''; }
   window.scrollTo(0,0);
@@ -1493,6 +1594,7 @@ function buildMapaSubtabs(){
     '<span class="subgrp active"><span class="subgrp-lbl">🔧 Mapa de Manutenção</span>'+
     '<select id="mapaTabSel" class="subsel" title="escolha o mapa ou a aba de DA/boletim">'+opts+'</select></span>'+
     '<button class="subtab" data-sheet="hist">🗂 Histórico de O.S.</button>'+
+    '<button class="subtab" data-sheet="baixas">✅ Baixas</button>'+
     '<button class="subtab" data-sheet="docs">📁 Documentos</button>';
   const sel=$('#mapaTabSel'); if(sel) sel.addEventListener('change',()=>selectMapaSubtab(sel.value));
   bar.querySelectorAll('.subtab').forEach(b=>b.addEventListener('click',()=>selectMapaSubtab(b.dataset.sheet)));
