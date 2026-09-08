@@ -1805,7 +1805,7 @@ function boot(){
   STATE.contadores=STATE.acmaps[currentAC].contadores; STATE.tarefas=STATE.acmaps[currentAC].tarefas;
   const a=acmaps[currentAC].aeronave||{};
   const label=`${a.matricula||currentAC} · ${a.modelo||''}${a.sn?' · S/N '+a.sn:''}`;
-  $('#acinfo').textContent=label+(a.ano?' · '+a.ano:'');
+  $('#acinfo').textContent='Frota';   // view padrão é a inicial (Frota) — aeronave só aparece no Mapa
   if($('#acbadge')) $('#acbadge').textContent='✈ '+label;
   buildMapaSubtabs();
   renderAll();
