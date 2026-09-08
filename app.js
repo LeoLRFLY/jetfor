@@ -81,7 +81,7 @@ function computeWith(task, CT, hoje){
 // STATE.acmaps = { 'PT-LJQ':{aeronave,contadores,tarefas,da}, ... }
 // STATE.contadores/tarefas apontam para a aeronave ativa (STATE.currentAC).
 function cur(){ return STATE.acmaps[STATE.currentAC]; }
-function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify({acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC,osProx:STATE.osProx,docsGeral:STATE.docsGeral,docCatsGeral:STATE.docCatsGeral,oficinas:STATE.oficinas,confiab:STATE.confiab})); }catch(e){} }
+function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify({acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC,osProx:STATE.osProx,docsGeral:STATE.docsGeral,docCatsGeral:STATE.docCatsGeral,oficinas:STATE.oficinas,confiab:STATE.confiab,confiabCfg:STATE.confiabCfg})); }catch(e){} }
 function loadLocal(){ try{ const s=localStorage.getItem('jetfor_mapa_v2'); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function acDoc(ac){ return DB.collection(window.FIRESTORE_COLECAO||'mapas').doc(ac); }
 
@@ -140,7 +140,7 @@ function loadCloudData(){
   // dados gerais (frota/hoje)
   acDoc('_geral').get().then(snap=>{
     if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),updatedAt:new Date().toISOString()}); }
-    else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; if(d.docsGeral) STATE.docsGeral=d.docsGeral; if(d.docCatsGeral) STATE.docCatsGeral=d.docCatsGeral; if(Array.isArray(d.confiab)) STATE.confiab=d.confiab; if(d.frota){ STATE.frota=d.frota; if($('#view-inicio').dataset.done) drawFleet(); } if($('#view-geral') && $('#view-geral').style.display!=='none') renderDocsGeral(); const cv=$('#view-confiab'); if(cv && cv.style.display!=='none') renderConfiabList(); }
+    else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; if(d.docsGeral) STATE.docsGeral=d.docsGeral; if(d.docCatsGeral) STATE.docCatsGeral=d.docCatsGeral; if(Array.isArray(d.confiab)) STATE.confiab=d.confiab; if(d.confiabCfg) STATE.confiabCfg=d.confiabCfg; if(d.frota){ STATE.frota=d.frota; if($('#view-inicio').dataset.done) drawFleet(); } if($('#view-geral') && $('#view-geral').style.display!=='none') renderDocsGeral(); const cv=$('#view-confiab'); if(cv && cv.style.display!=='none') renderConfiabList(); }
   }).catch(()=>{});
   acDoc('_oficinas').get().then(snap=>{
     if(snap.exists){ const d=snap.data()||{}; if(d.oficinas){ STATE.oficinas=d.oficinas; if($('#view-oficinas').style.display!=='none') renderOficinas(); } }
@@ -892,6 +892,15 @@ function iioHtml(){
   const I=window.JETFOR_IIO; if(!I) return '';
   let h=`<div class="comobox"><b>O que é IIO:</b> ${esc(I.definicao)}</div>`;
   h+=`<div class="iio-regra"><b>⚠ Regra de ouro:</b> ${esc(I.regraOuro)}</div>`;
+  h+=`<div class="proc" style="border-left-color:#2E7D32"><b>Quem autoriza / certifica os inspetores de IIO (MGM 2.8.2):</b>
+    <p style="margin:6px 0 4px">A responsabilidade de <b>autorizar e controlar</b> os inspetores de IIO é da <b>JetFor (operador)</b> — <b>inclusive quando o inspetor é de uma oficina contratada</b>. A ANAC certifica a habilitação do mecânico e a oficina 145 o qualifica internamente; mas, para o programa de IIO da JetFor, cabe ao operador:</p>
+    <ul>
+      <li><b>Exigir a relação atualizada</b> dos inspetores qualificados de cada provedor (nome, cargo/título e escopo autorizado) — lista que fica sempre à disposição da ANAC.</li>
+      <li><b>Certificar a independência</b>: o inspetor de IIO deve ser separado das demais funções de manutenção e <b>não pode ser o mecânico que executou o serviço</b> (dupla inspeção).</li>
+      <li><b>Treinar</b> os inspetores das contratadas nos procedimentos de IIO (a cargo do Gerente de Manutenção).</li>
+      <li><b>Designar por escrito</b> cada inspetor (formulário <i>Designação de Inspetores</i>, MGM 8.4.3), descrevendo responsabilidades, autoridade e limitações.</li>
+    </ul>
+    <div class="hint">Em resumo: a JetFor não emite a licença do profissional, mas é ela quem <b>valida, treina, designa por escrito e responde pela independência</b> dos inspetores de IIO — mesmo os das oficinas contratadas.</div></div>`;
   h+=`<div class="proc"><b>Códigos de requisito:</b><ul class="cods">`+
      I.codigos.map(c=>`<li><span class="cod">${esc(c.c)}</span> ${esc(c.t)}</li>`).join('')+`</ul></div>`;
   h+=`<div class="proc"><b>Lista de IIO por sistema (MGM 8.4.13 · Tabela 8.2):</b><div class="iiogrid">`;
@@ -1095,7 +1104,7 @@ function openConfiab(from){
 function saveConfiab(){
   saveLocal();
   if(ONLINE && DB){
-    try{ SUPPRESS=true; acDoc('_geral').set({confiab:(STATE.confiab||[]),updatedAt:new Date().toISOString()},{merge:true}).then(()=>{SUPPRESS=false;}).catch(()=>{SUPPRESS=false;}); toast('✔ Confiabilidade salva na nuvem'); }
+    try{ SUPPRESS=true; acDoc('_geral').set({confiab:(STATE.confiab||[]),confiabCfg:(STATE.confiabCfg||{}),updatedAt:new Date().toISOString()},{merge:true}).then(()=>{SUPPRESS=false;}).catch(()=>{SUPPRESS=false;}); toast('✔ Confiabilidade salva na nuvem'); }
     catch(e){ SUPPRESS=false; toast('⚠ Erro na nuvem — salvo local'); console.error(e); }
   } else { toast('✔ Salvo neste navegador'); }
 }
@@ -1168,6 +1177,78 @@ function confiabDel(id){
   logAction('Removeu ocorrência (Confiabilidade)', id);
 }
 
+// ================= NÍVEIS DE ALERTA (Confiabilidade — etapa 2) =================
+function niveisCfg(){ STATE.confiabCfg=STATE.confiabCfg||{janela:12,amarelo:2,vermelho:3,horas:''}; return STATE.confiabCfg; }
+function niveisSet(field,v){ const c=niveisCfg(); c[field]=(field==='horas')?v:(parseInt(v,10)||0); saveConfiab(); renderNiveisAlerta(); }
+function _niveisSens(t){ return /IFSD|Desligamento de motor/i.test(t||''); }
+function renderNiveisAlerta(){
+  const body=$('#sascBody'); if(!body) return;
+  const cfg=niveisCfg();
+  const regs=(STATE.confiab||[]);
+  const cut=new Date(); cut.setMonth(cut.getMonth()-(cfg.janela||12)); const cutISO=cut.toISOString().slice(0,10);
+  const win=regs.filter(r=> (r.data||'') >= cutISO);
+  const ATAL={}; CONFIAB_ATA.forEach(x=>ATAL[x[0]]=x[1]);
+  const horas=parseFloat(cfg.horas)||0;
+  const rate = n => horas>0 ? (n/horas*1000).toFixed(2) : null;
+  // agrupa por ATA
+  const byAta={}; win.forEach(r=>{ const k=(r.ata||'—'); (byAta[k]=byAta[k]||[]).push(r); });
+  function statusFor(list){
+    if(list.some(r=>_niveisSens(r.tipo))) return {cls:'od',lbl:'VERMELHO',rank:2};
+    const n=list.length;
+    if(n>=(cfg.vermelho||3)) return {cls:'od',lbl:'VERMELHO',rank:2};
+    if(n>=(cfg.amarelo||2)) return {cls:'wn',lbl:'AMARELO',rank:1};
+    return {cls:'ok',lbl:'VERDE',rank:0};
+  }
+  const ataRows=Object.keys(byAta).map(k=>({ata:k,list:byAta[k],st:statusFor(byAta[k])}))
+    .sort((a,b)=> b.st.rank-a.st.rank || b.list.length-a.list.length);
+  const nVerm=ataRows.filter(r=>r.st.rank===2).length, nAmar=ataRows.filter(r=>r.st.rank===1).length;
+  // reincidentes por P/N
+  const byPn={}; win.forEach(r=>{ const pn=(r.pn||'').trim(); if(pn){ (byPn[pn]=byPn[pn]||[]).push(r);} });
+  const reinc=Object.keys(byPn).map(pn=>({pn,n:byPn[pn].length,ac:(byPn[pn][0].ac||''),ata:(byPn[pn][0].ata||'')})).filter(x=>x.n>=2).sort((a,b)=>b.n-a.n).slice(0,8);
+  // tendência por mês
+  const months=[]; for(let i=(cfg.janela||12)-1;i>=0;i--){ const d=new Date(); d.setMonth(d.getMonth()-i); months.push(d.toISOString().slice(0,7)); }
+  const perMonth=months.map(m=> win.filter(r=>(r.data||'').slice(0,7)===m).length);
+  const maxM=Math.max(1,...perMonth);
+  const kpis=[['Ocorrências no período',win.length,''],['ATAs em vermelho',nVerm,nVerm?'od':'ok'],['ATAs em amarelo',nAmar,nAmar?'wn':'ok'],['Reincidentes (P/N)',reinc.length,reinc.length?'wn':'ok']];
+
+  const board = ataRows.length ? ataRows.map(r=>{
+    const rt=rate(r.list.length);
+    const tipos=[...new Set(r.list.map(x=>x.tipo).filter(Boolean))];
+    return `<div class="nvcard nv-${r.st.cls}">
+      <div class="nvtop"><span class="nvata">ATA ${esc(r.ata)}</span><span class="nvst nv-${r.st.cls}">${r.st.lbl}</span></div>
+      <div class="nvnome">${esc(ATAL[r.ata]||'')}</div>
+      <div class="nvn">${r.list.length} <span>ocorrência(s)${rt?` · ${rt}/1000h`:''}</span></div>
+      <div class="nvtipos">${tipos.slice(0,3).map(t=>esc(t)).join(' · ')||'—'}</div>
+    </div>`;
+  }).join('') : '<div class="cfbnote">Sem ocorrências no período. Registre no módulo de Confiabilidade.</div>';
+
+  body.innerHTML=`<div class="dashview">
+    <div class="cfbcardt">🚦 Níveis de Alerta — Confiabilidade (janela de ${cfg.janela||12} meses)</div>
+    <div class="cfbnote">Painel calculado a partir das ocorrências do módulo de Confiabilidade. Método para <b>frota pequena</b>: janela móvel de 12 meses + gatilho por evento (qualquer <b>IFSD</b> já acende vermelho). Ajuste os limiares abaixo. <button class="btn o sm" style="margin-left:6px" onclick="openConfiab('sasc')">➕ Registrar ocorrência</button></div>
+    <div class="filters">
+      <label style="font-size:12px;font-weight:600;color:var(--navy2)">Janela (meses)
+        <select onchange="niveisSet('janela',this.value)">${[6,12,24].map(m=>`<option value="${m}"${(cfg.janela||12)==m?' selected':''}>${m}</option>`).join('')}</select></label>
+      <label style="font-size:12px;font-weight:600;color:var(--navy2)">Limiar amarelo (≥)
+        <input type="number" min="1" value="${cfg.amarelo||2}" style="width:60px" onchange="niveisSet('amarelo',this.value)"></label>
+      <label style="font-size:12px;font-weight:600;color:var(--navy2)">Limiar vermelho (≥)
+        <input type="number" min="1" value="${cfg.vermelho||3}" style="width:60px" onchange="niveisSet('vermelho',this.value)"></label>
+      <label style="font-size:12px;font-weight:600;color:var(--navy2)">Horas voadas no período (opcional)
+        <input type="number" min="0" value="${esc(cfg.horas||'')}" placeholder="p/ taxa /1000h" style="width:120px" onchange="niveisSet('horas',this.value)"></label>
+    </div>
+    <div class="detkpis">${kpis.map(k=>`<div class="detkpi ${k[2]}"><div class="dn">${k[1]}</div><div class="dl">${k[0]}</div></div>`).join('')}</div>
+    <div class="detcard"><div class="detct">Quadro de alerta por sistema (ATA)</div><div class="nvgrid">${board}</div></div>
+    <div class="detgrid">
+      <div class="detcard"><div class="detct">Reincidentes (mesmo P/N ≥ 2×)</div>
+        ${reinc.length?`<table class="cfbtable"><thead><tr><th>P/N</th><th>Ocorr.</th><th>ATA</th><th>Aeronave</th></tr></thead><tbody>${reinc.map(x=>`<tr><td>${esc(x.pn)}</td><td><b>${x.n}</b></td><td>${esc(x.ata)}</td><td>${esc(x.ac)}</td></tr>`).join('')}</tbody></table>`:'<div style="color:#999;padding:8px">Nenhum P/N reincidente no período.</div>'}
+      </div>
+      <div class="detcard"><div class="detct">Tendência (ocorrências por mês)</div>
+        <div class="nvtrend">${months.map((m,i)=>`<div class="nvbar" title="${m}: ${perMonth[i]}"><span style="height:${Math.round(perMonth[i]/maxM*70)+2}px"></span><em>${m.slice(5)}</em></div>`).join('')}</div>
+      </div>
+    </div>
+    <div class="cfbnote" style="background:#f7f9fc;border-left-color:var(--gold)">Quando um ATA estoura o limiar (ou há um IFSD), abra investigação, defina ação corretiva e leve ao <b>Comitê SASC</b>. Este é o insumo do relatório mensal de confiabilidade (MGM 5.6 · IS 120-016).</div>
+  </div>`;
+}
+
 // ================= MENU SASC (workspace do programa) =================
 function openFormItem(k){
   switchView('forms');
@@ -1190,11 +1271,7 @@ const SASC_ITEMS=[
     <div class="cfbcardt">Comitê SASC & Atas (F-SASC-01)</div>
     <div class="cfbnote">Reunião <b>trimestral</b> do Comitê SASC para analisar indicadores de confiabilidade, itens acima do nível de alerta e a eficácia das ações corretivas. Registro em ata (formulário F-SASC-01), com decisões e responsáveis. Base: MGM 5.6 · IS 120-016.</div>
     <div class="sascph">🚧 Módulo em construção — aqui vai entrar o registro das reuniões (data, participantes, pauta, decisões) e o histórico de atas. Quer que eu monte na próxima etapa?</div>`},
-  {key:'alerta', label:'🚦 Níveis de Alerta / Relatório', html:()=>`
-    <div class="cfbcardt">Níveis de Alerta / Relatório de Confiabilidade</div>
-    <div class="cfbnote">Saída <b>mensal</b> do programa: taxas por ATA (por 1000h/ciclos) em janela de 12 meses, comparadas aos níveis de alerta, com tendência e reincidentes. Alimentado pelas ocorrências do módulo de Confiabilidade.</div>
-    <div class="sascph">🚦 Este painel é a <b>etapa 2</b> do módulo de Confiabilidade (o cálculo automático). Assim que você validar a coleta, eu ligo os cálculos e o painel verde/amarelo/vermelho aparece aqui.
-    <div style="margin-top:10px"><button class="btn p" onclick="openConfiab('sasc')">Ir para a coleta de Confiabilidade →</button></div></div>`},
+  {key:'alerta', label:'🚦 Níveis de Alerta / Relatório', launch:()=>renderNiveisAlerta()},
   {key:'iio', label:'✅ Itens de Inspeção Obrigatória', html:()=> (window.JETFOR_IIO? iioHtml() : '<div class="cfbnote">Conteúdo de IIO não carregado.</div>')}
 ];
 function sascShow(k){
@@ -1566,7 +1643,8 @@ function boot(){
     docsGeral: (local&&local.docsGeral) || [],
     docCatsGeral: (local&&local.docCatsGeral) || [],
     oficinas: (local&&local.oficinas) || [],
-    confiab: (local&&local.confiab) || []
+    confiab: (local&&local.confiab) || [],
+    confiabCfg: (local&&local.confiabCfg) || {janela:12,amarelo:2,vermelho:3,horas:''}
   };
   migrateMapsFull();
   STATE.contadores=STATE.acmaps[currentAC].contadores; STATE.tarefas=STATE.acmaps[currentAC].tarefas;

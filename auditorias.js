@@ -147,6 +147,18 @@ function openOficinaDetalhe(idx){
   else { audHtml='<div class="tblwrap"><table class="da"><thead><tr><th>Nº</th><th>Data</th><th>Tipo</th><th>Resultado</th><th>NCs</th><th class="num no-print">Ações</th></tr></thead><tbody>'+
     auds.map(function(a){ const i=o.auditorias.indexOf(a); return `<tr><td><b>${esc(a.numero||'—')}</b></td><td>${a.data?fmtDate(new Date(a.data+'T00:00:00')):'—'}</td><td>${esc(a.tipo||'—')}</td><td>${esc(a.resultado||'—')}</td><td>${(a.ncs||[]).filter(n=>n.desc).length}</td><td class="num no-print"><button class="btn o sm" onclick="abrirAuditoria(${idx},${i})">Abrir</button> <button class="btn o sm" onclick="excluirAuditoria(${idx},${i})">🗑</button></td></tr>`; }).join('')+
     '</tbody></table></div>'; }
+  o.inspetoresIIO=o.inspetoresIIO||[];
+  const inspRows = o.inspetoresIIO.length ? o.inspetoresIIO.map(function(p){ const i=o.inspetoresIIO.indexOf(p);
+    const venc = p.validade && p.validade < (STATE.hoje||todayISO());
+    return `<tr>
+      <td><input value="${esc(p.nome||'')}" placeholder="nome" onchange="ofInspSet(${idx},${i},'nome',this.value)"></td>
+      <td><input value="${esc(p.canac||'')}" placeholder="CANAC" style="width:88px" onchange="ofInspSet(${idx},${i},'canac',this.value)"></td>
+      <td><input value="${esc(p.habil||'')}" placeholder="ex.: CEL/GMP/AVI" style="width:110px" onchange="ofInspSet(${idx},${i},'habil',this.value)"></td>
+      <td><input value="${esc(p.escopo||'')}" placeholder="ATA/sistemas autorizados" onchange="ofInspSet(${idx},${i},'escopo',this.value)"></td>
+      <td><input type="date" value="${esc(p.designacao||'')}" onchange="ofInspSet(${idx},${i},'designacao',this.value)"></td>
+      <td><input type="date" value="${esc(p.validade||'')}" class="${venc?'disp-neg':''}" onchange="ofInspSet(${idx},${i},'validade',this.value)"></td>
+      <td class="no-print"><button class="btn o sm" title="Gerar designação (imprimir)" onclick="ofInspDesignacao(${idx},${i})">🖨</button> <button class="btn o sm" onclick="ofInspDel(${idx},${i})">🗑</button></td></tr>`;
+  }).join('') : '<tr><td colspan="7" style="color:#999;padding:10px">Nenhum inspetor de IIO designado.</td></tr>';
   const h=`<div class="ofdet">
     <div class="dethead"><button class="btn o no-print" onclick="renderOficinas()">← Voltar</button>
       <div><div class="dettitle">🏭 ${esc(o.razao||'(sem nome)')}</div>
@@ -170,6 +182,11 @@ function openOficinaDetalhe(idx){
       </div>
       <div class="tblwrap"><table class="cfbtable"><thead><tr><th>Nº</th><th>Data de envio</th><th>Revisão</th><th>Meio</th><th>Ciência da oficina</th><th>Responsável</th><th>Obs</th><th class="no-print"></th></tr></thead><tbody>${mgmRows}</tbody></table></div>
     </div>
+    <div class="detcard"><div class="detct">Inspetores de IIO designados</div>
+      <div class="cfbnote">Inspetores autorizados por escrito a inspecionar IIOs nesta oficina contratada. A JetFor exige a relação, treina, <b>designa por escrito</b> e responde pela independência (MGM 2.8.2). <a href="#" onclick="if(typeof switchView==='function')switchView('sasc');return false">Ver a regra de IIO no menu SASC ↗</a></div>
+      <button class="btn g sm no-print" style="margin-bottom:8px" onclick="ofInspAdd(${idx})">➕ Designar inspetor de IIO</button>
+      <div class="tblwrap"><table class="cfbtable"><thead><tr><th>Nome</th><th>CANAC</th><th>Habilitações</th><th>Escopo autorizado (IIO)</th><th>Designação</th><th>Validade</th><th class="no-print"></th></tr></thead><tbody>${inspRows}</tbody></table></div>
+    </div>
   </div>`;
   $('#view-oficinas').innerHTML=h;
   window.scrollTo(0,0);
@@ -177,6 +194,37 @@ function openOficinaDetalhe(idx){
 function ofField(idx,k,v){ const o=oficinas()[idx]; if(!o)return; o[k]=v; saveAll(); if(typeof logAction==='function') logAction('Atualizou oficina', (o.razao||'')+' · '+k); }
 function ofToggleAeronave(idx,mat,on){ const o=oficinas()[idx]; if(!o)return; o.aeronaves=o.aeronaves||[]; const i=o.aeronaves.indexOf(mat); if(on && i<0)o.aeronaves.push(mat); if(!on && i>=0)o.aeronaves.splice(i,1); saveAll(); const frota=(STATE.frota||[]); const nS=frota.filter(f=>f.sasc&&o.aeronaves.includes(f.mat)).length; const nN=frota.filter(f=>!f.sasc&&o.aeronaves.includes(f.mat)).length; const el=document.getElementById('ofAcResumo'); if(el)el.textContent='('+nS+' SASC · '+nN+' não-SASC)'; }
 function ofComprovSet(idx,k,field,v){ const o=oficinas()[idx]; if(!o)return; const cp=ofComprov(o); cp[k]=cp[k]||{}; cp[k][field]=v; saveAll(); }
+function ofInspAdd(idx){ const o=oficinas()[idx]; if(!o)return; o.inspetoresIIO=o.inspetoresIIO||[]; o.inspetoresIIO.push({designacao:(STATE.hoje||todayISO())}); saveAll(); if(typeof logAction==='function') logAction('Designou inspetor de IIO', o.razao||''); openOficinaDetalhe(idx); }
+function ofInspSet(idx,i,field,v){ const o=oficinas()[idx]; if(!o||!o.inspetoresIIO||!o.inspetoresIIO[i])return; o.inspetoresIIO[i][field]=v; saveAll(); }
+function ofInspDel(idx,i){ const o=oficinas()[idx]; if(!o||!o.inspetoresIIO)return; if(!confirm('Remover este inspetor de IIO?'))return; o.inspetoresIIO.splice(i,1); saveAll(); openOficinaDetalhe(idx); }
+function ofInspDesignacao(idx,i){
+  const o=oficinas()[idx]; if(!o)return; const p=(o.inspetoresIIO||[])[i]; if(!p)return;
+  const emp='TERRAL TÁXI AÉREO LTDA (JetFor Aviation)';
+  const hoje=fmtDate(new Date((STATE.hoje||todayISO())+'T00:00:00'));
+  const dg=p.designacao?fmtDate(new Date(p.designacao+'T00:00:00')):hoje;
+  const vl=p.validade?fmtDate(new Date(p.validade+'T00:00:00')):'—';
+  const html='<!doctype html><html><head><meta charset="utf-8"><title>Designação de Inspetor de IIO</title>'+
+    '<style>body{font-family:Arial,sans-serif;color:#111;margin:40px;font-size:13px;line-height:1.5}'+
+    'h1{font-size:16px;text-align:center;margin:0 0 4px}.sub{text-align:center;color:#555;font-size:11px;margin-bottom:18px}'+
+    'table{border-collapse:collapse;width:100%;font-size:12px;margin:10px 0}td,th{border:1px solid #999;padding:6px 8px;text-align:left}th{background:#eef;white-space:nowrap}'+
+    '.p{margin:12px 0;text-align:justify}.sig{margin-top:64px;display:flex;justify-content:space-between;gap:40px}'+
+    '.sig div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center;font-size:11px}</style></head><body>'+
+    '<h1>DESIGNAÇÃO DE INSPETOR DE ITEM DE INSPEÇÃO OBRIGATÓRIA (IIO)</h1>'+
+    '<div class="sub">'+emp+' · MGM 2.8.2 / 8.4.3 · RBAC 135</div>'+
+    '<p class="p">Nos termos do RBAC 135 e do procedimento do Manual Geral de Manutenção (MGM 2.8), fica <b>designado</b> o profissional abaixo como <b>Inspetor de Itens de Inspeção Obrigatória (IIO)</b>, autorizado a inspecionar e aprovar os IIOs dentro do escopo indicado:</p>'+
+    '<table><tr><th>Nome</th><td>'+esc(p.nome||'')+'</td><th>CANAC</th><td>'+esc(p.canac||'')+'</td></tr>'+
+    '<tr><th>Habilitações</th><td>'+esc(p.habil||'')+'</td><th>Organização</th><td>'+esc(o.razao||'')+(o.che?' · CHE '+esc(o.che):'')+'</td></tr>'+
+    '<tr><th>Escopo autorizado (IIO)</th><td colspan="3">'+esc(p.escopo||'')+'</td></tr>'+
+    '<tr><th>Data da designação</th><td>'+dg+'</td><th>Validade</th><td>'+vl+'</td></tr></table>'+
+    '<p class="p"><b>Responsabilidades, autoridade e limitações:</b> o inspetor designado é responsável por inspecionar os IIOs sob seu escopo e aprovar o retorno ao serviço somente quando o resultado for satisfatório; deve manter <b>independência</b> — não pode inspecionar serviço por ele mesmo executado (dupla inspeção); atua sob supervisão do Inspetor-Chefe, observando os procedimentos do MGM. A JetFor mantém esta designação e a relação de inspetores à disposição da ANAC.</p>'+
+    '<div class="sig"><div>'+emp+'<br>Diretor / Gerente de Manutenção</div><div>'+esc(p.nome||'Inspetor designado')+'<br>Inspetor de IIO — ciente</div></div>'+
+    '<p style="margin-top:24px;font-size:10px;color:#777">Emitido em '+hoje+'. Documento de controle da contratante; mantido junto aos registros do SASC.</p></body></html>';
+  const ifr=document.createElement('iframe'); ifr.style.position='fixed'; ifr.style.right='0'; ifr.style.bottom='0'; ifr.style.width='0'; ifr.style.height='0'; ifr.style.border='0';
+  document.body.appendChild(ifr);
+  const d=ifr.contentWindow.document; d.open(); d.write(html); d.close();
+  setTimeout(function(){ try{ ifr.contentWindow.focus(); ifr.contentWindow.print(); }catch(e){} setTimeout(function(){ try{ifr.remove();}catch(e){} }, 1500); }, 350);
+  if(typeof logAction==='function') logAction('Gerou designação de inspetor IIO', (o.razao||'')+' · '+(p.nome||''));
+}
 function ofMgmSync(o){ const ult=(o.mgmEnvios||[]).map(m=>m.data).filter(Boolean).sort().pop(); o.dataEnvioMGM=ult||''; const ur=(o.mgmEnvios||[]).slice().sort((a,b)=>(a.data||'').localeCompare(b.data||'')).pop(); if(ur&&ur.revisao) o.mgmVersao=ur.revisao; }
 function ofMgmAdd(idx){ const o=oficinas()[idx]; if(!o)return; o.mgmEnvios=o.mgmEnvios||[]; o.mgmEnvios.push({data:(STATE.hoje||todayISO()),meio:'E-mail'}); ofMgmSync(o); saveAll(); if(typeof logAction==='function') logAction('Registrou envio de MGM à oficina', o.razao||''); openOficinaDetalhe(idx); }
 function ofMgmSet(idx,i,field,v){ const o=oficinas()[idx]; if(!o||!o.mgmEnvios||!o.mgmEnvios[i])return; o.mgmEnvios[i][field]=v; ofMgmSync(o); saveAll(); }
