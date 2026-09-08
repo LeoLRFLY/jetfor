@@ -1765,6 +1765,13 @@ function switchView(v){
   if(v==='forms') renderForms();
   if(v==='geral') renderDocsGeral();
   if(v==='oficinas') renderOficinas();
+  // subtítulo do cabeçalho: aeronave só no Mapa; nas demais abas, o nome da seção
+  { const ac=$('#acinfo');
+    if(ac){
+      if(v==='mapa'){ const a=(cur().aeronave)||{}; const label=`${a.matricula||STATE.currentAC} · ${a.modelo||''}${a.sn?' · S/N '+a.sn:''}`; ac.textContent=label+(a.ano?' · '+a.ano:''); }
+      else { const sec={inicio:'Frota',freq:'Atividades & Frequências',obrig:'Obrigações de manutenção',sasc:'SASC',forms:'Formulários',geral:'Documentos',oficinas:'Oficinas & Auditorias',usuarios:'Usuários',logs:'Registro de atividades',detetive:'Detetive JetFor'}; ac.textContent=sec[v]||''; }
+    }
+  }
   window.scrollTo(0,0);
 }
 
