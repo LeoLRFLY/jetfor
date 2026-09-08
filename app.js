@@ -750,9 +750,55 @@ function openTaskHist(id){
       body+=`<tr><td>${e.data?fmtDate(new Date(e.data+'T00:00:00')):'—'}</td><td>${esc(e.oficina||'—')}</td><td class="num">${leit}</td></tr>`; });
     body+=`</tbody></table></div>`;
   }
+  // --- Transição: lançar os dados da última execução desta tarefa em outras ---
+  const src=(t.hist&&t.hist.length)?h[0]:null; // h já está invertido (mais recente primeiro)
+  if(src){
+    const dSrc=src.data?fmtDate(new Date(src.data+'T00:00:00')):'—';
+    const lSrc=src.leitura!=null?(fmtN(src.leitura,1)+' '+unitForBase(src.base)):(src.cal?'(calendário)':'—');
+    body+=`<div class="fsec">↪ Lançar estes dados em outra(s) tarefa(s)</div>`;
+    body+=`<p class="lead">Aplica a <b>última execução</b> desta tarefa (<b>${dSrc}</b> · ${esc(src.oficina||'—')} · ${lSrc}) em outras tarefas, sem redigitar. A leitura só entra em tarefas de <b>mesma base</b>; as demais recebem só a data/calendário. Fica registrado no histórico de cada tarefa e na aba Baixas.</p>`;
+    body+=`<button class="btn o sm" id="htToggle" data-id="${esc(t.id)}">↪ Escolher tarefas destino…</button>`;
+    body+=`<div id="htPick" style="display:none;margin-top:10px">`;
+    body+=`<input id="htSearch" placeholder="🔎 filtrar por nome, base ou grupo…" style="width:100%;max-width:420px;margin:0 0 8px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px">`;
+    body+=`<div id="htList" style="max-height:240px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;padding:6px">`;
+    const cand=(cur().tarefas||[]).filter(x=>x.id!==t.id);
+    cand.forEach(x=>{ const base=x.base||''; const grp=x.grupo||'';
+      body+=`<label class="htpickrow" data-txt="${esc(((x.nome||'')+' '+base+' '+grp).toLowerCase())}" style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-bottom:1px solid #f1f5f9;cursor:pointer"><input type="checkbox" class="htpick" value="${esc(x.id)}"><span style="flex:1">${esc(x.nome||x.id)}</span><span class="pill" style="background:#e2e8f0;color:#334155">${esc(BASE_LABEL[base]||base||'cal')}</span></label>`;
+    });
+    if(!cand.length) body+='<p class="lead muted" style="margin:6px">Não há outras tarefas nesta aeronave.</p>';
+    body+=`</div><div style="margin-top:10px"><button class="btn p" id="htApply" data-id="${esc(t.id)}">✅ Lançar nas tarefas marcadas</button> <span id="htCount" class="muted"></span></div></div>`;
+  }
   $('#histTitle').textContent='Histórico de cumprimentos — '+STATE.currentAC;
   $('#histBody').innerHTML=body;
+  const tg=$('#htToggle');
+  if(tg){
+    tg.addEventListener('click',()=>{ const pk=$('#htPick'); pk.style.display=(pk.style.display==='none')?'block':'none'; });
+    const srch=$('#htSearch'), list=$('#htList');
+    function upd(){ const n=list.querySelectorAll('.htpick:checked').length; $('#htCount').textContent=n?(n+' marcada(s)'):''; }
+    if(srch) srch.addEventListener('input',()=>{ const q=srch.value.trim().toLowerCase(); list.querySelectorAll('.htpickrow').forEach(r=>{ r.style.display=(!q||r.dataset.txt.indexOf(q)>=0)?'flex':'none'; }); });
+    list.querySelectorAll('.htpick').forEach(c=>c.addEventListener('change',upd));
+    $('#htApply').addEventListener('click',()=>histLancarEmOutras(id));
+  }
   $('#histOverlay').classList.add('show');
+}
+function histLancarEmOutras(id){
+  const t=cur().tarefas.find(x=>x.id===id); if(!t) return;
+  const h=(t.hist||[]).slice().reverse(); const src=h[0]; if(!src){ toast('Sem execução para lançar'); return; }
+  const ids=Array.from($('#histBody').querySelectorAll('.htpick:checked')).map(c=>c.value);
+  if(!ids.length){ toast('Marque ao menos uma tarefa destino'); return; }
+  const data=src.data||todayISO(); const ref=src.oficina||'';
+  const readings={}; if(src.base && src.base!=='calendario' && src.leitura!=null){ readings[src.base]=src.leitura; }
+  const res=_baixaApply(ids,data,ref,readings);
+  if(res.n>0){
+    const m=cur(); m.baixas=m.baixas||[];
+    m.baixas.push({ id:'bx'+Date.now().toString(36), data:data, ref:ref, readings:readings, tarefas:res.tarefas, criadoEm:new Date().toISOString(), por:(window.CURRENT_USER&&window.CURRENT_USER.nome)||'', origem:'transicao:'+(t.nome||t.id) });
+    saveAll(); renderTable();
+    toast('✔ Lançado em '+res.n+' tarefa(s)'+(res.skip?' ('+res.skip+' sem intervalo/calendário)':''));
+    logAction('Lançou dados de tarefa em outras (transição)', res.n+' tarefa(s) · '+STATE.currentAC+' · origem: '+(t.nome||t.id));
+  } else {
+    toast('Nenhuma tarefa alterada (sem intervalo/calendário aplicável)');
+  }
+  openTaskHist(id); // recarrega o modal com as candidatas atualizadas
 }
 function closeHist(){ $('#histOverlay').classList.remove('show'); }
 
