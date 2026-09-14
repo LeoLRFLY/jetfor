@@ -1288,10 +1288,67 @@ function renderConfiab(){
      </div>
 
      <div class="cfbcard">
+       <div class="cfbcardt">📋 Discrepâncias de revisão (lote)</div>
+       <div class="cfbnote" style="margin:6px 0 10px">Preencha os dados comuns da revisão <b>uma vez</b> e adicione quantas discrepâncias precisar. Todas são registradas juntas, com a mesma <b>origem</b>, para rastreá-las como um conjunto.</div>
+       <div class="cfbform">
+         <label>Data<input type="date" id="lt_data" value="${todayISO()}"></label>
+         <label>Aeronave<select id="lt_ac">${acOpts}</select></label>
+         <label class="wide">Revisão / OS de origem<input type="text" id="lt_origem" placeholder="Ex.: Revisão Fase 400h – OS WHB002/2026"></label>
+         <label>Horas (TSN)<input type="number" id="lt_horas" step="0.1"></label>
+         <label>Ciclos<input type="number" id="lt_ciclos"></label>
+         <label>Pousos<input type="number" id="lt_pousos"></label>
+       </div>
+       <div class="cfbcardt" style="font-size:13px;margin-top:12px">Discrepâncias</div>
+       <div class="tblwrap"><table class="cfbtable"><thead><tr><th style="min-width:120px">ATA</th><th style="min-width:150px">Tipo</th><th style="min-width:200px">Descrição</th><th style="min-width:160px">Ação / status</th><th style="min-width:90px">P/N</th><th style="min-width:90px">S/N</th><th></th></tr></thead><tbody id="ltLinhas"></tbody></table></div>
+       <div style="margin-top:8px"><button class="btn o sm" onclick="cfLoteAddLinha()">＋ adicionar discrepância</button></div>
+       <div style="text-align:right;margin-top:8px"><button class="btn p" onclick="cfLoteRegistrar()">✅ Registrar todas</button></div>
+     </div>
+
+     <div class="cfbcard">
        <div class="cfbcardt">Ocorrências registradas <span id="cfbCount" class="cfbcount"></span></div>
-       <div class="tblwrap"><table class="cfbtable"><thead><tr><th>Data</th><th>Aeronave</th><th>ATA</th><th>Tipo</th><th>Descrição</th><th>Ação</th><th></th></tr></thead><tbody id="cfbList"></tbody></table></div>
+       <div class="tblwrap"><table class="cfbtable"><thead><tr><th>Data</th><th>Aeronave</th><th>ATA</th><th>Tipo</th><th>Descrição</th><th>Ação</th><th>Origem</th><th></th></tr></thead><tbody id="cfbList"></tbody></table></div>
      </div>
    </div>`;
+  renderConfiabList();
+  cfLoteAddLinha();
+}
+function _cfAtaOpts(){ return CONFIAB_ATA.map(x=>`<option value="${x[0]}">${x[0]} — ${esc(x[1])}</option>`).join(''); }
+function _cfTipoOpts(){ return CONFIAB_TIPOS.map(t=>`<option>${esc(t)}</option>`).join(''); }
+function cfLoteAddLinha(){
+  const tb=$('#ltLinhas'); if(!tb) return;
+  const tr=document.createElement('tr'); tr.className='ltrow';
+  tr.innerHTML=`
+    <td><select class="lt-ata" style="width:100%"><option value="">—</option>${_cfAtaOpts()}</select></td>
+    <td><select class="lt-tipo" style="width:100%">${_cfTipoOpts()}</select></td>
+    <td><textarea class="lt-desc" rows="1" style="width:100%" placeholder="discrepância"></textarea></td>
+    <td><textarea class="lt-acao" rows="1" style="width:100%" placeholder="ação / status"></textarea></td>
+    <td><input class="lt-pn" type="text" style="width:100%"></td>
+    <td><input class="lt-sn" type="text" style="width:100%"></td>
+    <td><button class="btn o sm" onclick="cfLoteDelLinha(this)" title="remover linha">🗑</button></td>`;
+  tb.appendChild(tr);
+}
+function cfLoteDelLinha(btn){
+  const tr=btn.closest('tr'); if(!tr) return;
+  const tb=$('#ltLinhas'); tr.remove();
+  if(tb && !tb.querySelector('.ltrow')) cfLoteAddLinha(); // sempre deixa ao menos 1 linha
+}
+function cfLoteRegistrar(){
+  const g=id=>{const e=$('#'+id);return e?String(e.value).trim():'';};
+  const data=g('lt_data'), ac=g('lt_ac'), origem=g('lt_origem'), horas=g('lt_horas'), ciclos=g('lt_ciclos'), pousos=g('lt_pousos');
+  const rows=Array.from(document.querySelectorAll('#ltLinhas .ltrow'));
+  const gv=(r,cls)=>{const e=r.querySelector(cls);return e?String(e.value).trim():'';};
+  const linhas=rows.map(r=>({ ata:gv(r,'.lt-ata'), tipo:gv(r,'.lt-tipo'), desc:gv(r,'.lt-desc'), acao:gv(r,'.lt-acao'), pn:gv(r,'.lt-pn'), sn:gv(r,'.lt-sn') })).filter(l=>l.desc);
+  if(!linhas.length){ toast('Adicione ao menos uma discrepância com descrição'); return; }
+  const loteId='lote'+Date.now();
+  STATE.confiab=STATE.confiab||[];
+  linhas.forEach((l,i)=>{
+    STATE.confiab.push({ id:'cf'+Date.now()+'_'+i+'_'+Math.floor(Math.random()*1000), data:data, ac:ac, ata:l.ata, tipo:l.tipo, desc:l.desc, horas:horas, ciclos:ciclos, pousos:pousos, pn:l.pn, sn:l.sn, acao:l.acao, origem:origem, loteId:loteId, criadoEm:new Date().toISOString() });
+  });
+  saveConfiab();
+  toast('✔ '+linhas.length+' discrepância(s) registrada(s)'+(origem?' · '+origem:''));
+  logAction('Registrou lote de discrepâncias (Confiabilidade)', linhas.length+' item(ns) · '+(ac||'')+(origem?' · '+origem:''));
+  $('#ltLinhas').innerHTML=''; cfLoteAddLinha();
+  $('#lt_origem').value='';
   renderConfiabList();
 }
 function renderConfiabList(){
@@ -1301,8 +1358,9 @@ function renderConfiabList(){
   tb.innerHTML = regs.length? regs.map(r=>`<tr>
      <td class="num">${esc(r.data||'')}</td><td>${esc(r.ac||'')}</td><td>${esc(r.ata||'')}</td>
      <td>${esc(r.tipo||'')}</td><td class="cfbdesc">${esc(r.desc||'')}</td><td class="cfbdesc">${esc(r.acao||'')}</td>
+     <td class="cfbdesc">${esc(r.origem||'')}</td>
      <td><button class="btn o sm" onclick="confiabDel('${r.id}')">🗑</button></td></tr>`).join('')
-    : '<tr><td colspan="7" style="color:#999;text-align:center;padding:14px">Nenhuma ocorrência registrada ainda.</td></tr>';
+    : '<tr><td colspan="8" style="color:#999;text-align:center;padding:14px">Nenhuma ocorrência registrada ainda.</td></tr>';
 }
 function confiabAdd(){
   const g=id=>{const e=$('#'+id);return e?String(e.value).trim():'';};
