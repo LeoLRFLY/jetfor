@@ -81,7 +81,7 @@ function computeWith(task, CT, hoje){
 // STATE.acmaps = { 'PT-LJQ':{aeronave,contadores,tarefas,da}, ... }
 // STATE.contadores/tarefas apontam para a aeronave ativa (STATE.currentAC).
 function cur(){ return STATE.acmaps[STATE.currentAC]; }
-function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify({acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC,osProx:STATE.osProx,docsGeral:STATE.docsGeral,docCatsGeral:STATE.docCatsGeral,oficinas:STATE.oficinas,confiab:STATE.confiab,confiabCfg:STATE.confiabCfg})); }catch(e){} }
+function saveLocal(){ try{ localStorage.setItem('jetfor_mapa_v2', JSON.stringify({acmaps:STATE.acmaps,frota:STATE.frota,hoje:STATE.hoje,currentAC:STATE.currentAC,osProx:STATE.osProx,docsGeral:STATE.docsGeral,docCatsGeral:STATE.docCatsGeral,oficinas:STATE.oficinas,confiab:STATE.confiab,confiabCfg:STATE.confiabCfg,rsiEnvios:STATE.rsiEnvios})); }catch(e){} }
 function loadLocal(){ try{ const s=localStorage.getItem('jetfor_mapa_v2'); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function acDoc(ac){ return DB.collection(window.FIRESTORE_COLECAO||'mapas').doc(ac); }
 
@@ -140,7 +140,7 @@ function loadCloudData(){
   // dados gerais (frota/hoje)
   acDoc('_geral').get().then(snap=>{
     if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),updatedAt:new Date().toISOString()}); }
-    else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; if(d.docsGeral) STATE.docsGeral=d.docsGeral; if(d.docCatsGeral) STATE.docCatsGeral=d.docCatsGeral; if(Array.isArray(d.confiab)) STATE.confiab=d.confiab; if(d.confiabCfg) STATE.confiabCfg=d.confiabCfg; if(d.frota){ STATE.frota=d.frota; if($('#view-inicio').dataset.done) drawFleet(); } if($('#view-geral') && $('#view-geral').style.display!=='none') renderDocsGeral(); const cv=$('#view-confiab'); if(cv && cv.style.display!=='none') renderConfiabList(); }
+    else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; if(d.docsGeral) STATE.docsGeral=d.docsGeral; if(d.docCatsGeral) STATE.docCatsGeral=d.docCatsGeral; if(Array.isArray(d.confiab)) STATE.confiab=d.confiab; if(d.confiabCfg) STATE.confiabCfg=d.confiabCfg; if(d.rsiEnvios){ STATE.rsiEnvios=d.rsiEnvios; if($('#view-inicio').dataset.done) drawFleet(); } if(d.frota){ STATE.frota=d.frota; if($('#view-inicio').dataset.done) drawFleet(); } if($('#view-geral') && $('#view-geral').style.display!=='none') renderDocsGeral(); const cv=$('#view-confiab'); if(cv && cv.style.display!=='none') renderConfiabList(); }
   }).catch(()=>{});
   acDoc('_oficinas').get().then(snap=>{
     if(snap.exists){ const d=snap.data()||{}; if(d.oficinas){ STATE.oficinas=d.oficinas; if($('#view-oficinas').style.display!=='none') renderOficinas(); } }
@@ -192,11 +192,16 @@ function subscribeAC(ac){
     if(ac===STATE.currentAC){ STATE.contadores=m.contadores; STATE.tarefas=m.tarefas; renderCounters(); renderTable(); }
   });
 }
+// v67: o status do Firebase só aparece quando NÃO há conexão (aviso vermelho)
 function setBadge(on){
-  const b=$('#connBadge');
-  if(on){ b.className='badge on'; b.textContent='● Firebase conectado'; }
-  else  { b.className='badge off'; b.textContent='● Local (sem nuvem)'; }
+  const b=$('#connBadge'); if(!b) return;
+  const off = !on || (typeof navigator!=='undefined' && navigator.onLine===false);
+  b.className='badge conn-off'; b.hidden=!off;
+  b.textContent = !on ? '⚠ Sem conexão com o Firebase: as alterações ficam só neste aparelho.'
+                      : '⚠ Sem internet: as alterações ficam neste aparelho até a conexão voltar.';
 }
+window.addEventListener('online',()=>setBadge(ONLINE));
+window.addEventListener('offline',()=>setBadge(ONLINE));
 
 // ---------- CONTADORES (render) — grupos derivados do cadastro (nº motores/hélices) ----------
 // ---------- migração: motor TSN/TSO/CSN/CSO, hélice TSN/TSO ----------
@@ -1083,75 +1088,203 @@ function matchAcmapKey(f){
   for(const k in am){ if(am[k].aeronave && f.modelo && am[k].aeronave.modelo===f.modelo) return k; }
   return null;
 }
-// status agregado das tarefas de uma aeronave (para o card da página inicial)
+// ---------- PÁGINA INICIAL (layout "JetFor Frota", v67) ----------
+// Os números saem do MESMO cálculo do mapa (computeWith + WARN). Nada aqui muda o cálculo.
+const UNIT_TXT={h:'h',pou:'pousos',cic:'ciclos'};
+function _urg(c){
+  // item mais crítico de uma tarefa: menor razão disp/limiar entre a parte numérica e a de calendário
+  let best=null;
+  if(c.num && c.num.disp!=null){ const w=WARN[c.num.unit]||50; best={disp:c.num.disp,unit:c.num.unit,r:c.num.disp/w}; }
+  if(c.cal && c.cal.disp!=null){ const r=c.cal.disp/WARN.dias; if(!best||r<best.r) best={disp:c.cal.disp,unit:'d',r:r}; }
+  return best;
+}
+function _fmtDisp(u){ if(!u) return '—'; return u.unit==='d' ? u.disp+' d' : fmtN(u.disp,0)+' '+(UNIT_TXT[u.unit]||u.unit); }
+function _taskSub(t){
+  const cat=CAT_LABEL[t.categoria]||'';
+  const parts=[];
+  if(t.base && t.base!=='calendario' && t.intervalo!=null){ const u=baseUnit(t.base); parts.push('a cada '+fmtN(t.intervalo,0)+' '+(UNIT_TXT[u]||'h')); }
+  if(t.cal && t.cal.meses) parts.push(t.cal.meses+' meses');
+  return [cat||(t.base==='calendario'?'Calendário':''), parts.join(' / ')].filter(Boolean).join(' · ');
+}
+// status completo de uma aeronave (contagens + item mais urgente + lista de itens)
 function fleetStatus(ac){
   const m=STATE.acmaps[ac]; if(!m) return null;
   const C=m.contadores||{}; const hoje=STATE.hoje||todayISO();
   const tarefas=(m.tarefas||[]).filter(t=>t.categoria!=='ica');
   if(!tarefas.length) return null;
-  let od=0,wn=0,ok=0, proxH=null,proxHu='', proxD=null;
+  let od=0,wn=0,ok=0; const itens=[];
   tarefas.forEach(t=>{
     const c=computeWith(t,C,hoje);
     if(c.status==='od') od++; else if(c.status==='wn') wn++; else ok++;
-    if(c.num && c.num.disp!=null && c.num.disp>=0){ if(proxH==null||c.num.disp<proxH){ proxH=c.num.disp; proxHu=c.num.unit; } }
-    if(c.cal && c.cal.disp!=null && c.cal.disp>=0){ if(proxD==null||c.cal.disp<proxD) proxD=c.cal.disp; }
+    const u=_urg(c); if(u) itens.push({ac:ac,t:t,st:c.status,u:u});
   });
-  return {od,wn,ok,total:tarefas.length,proxH,proxHu,proxD};
+  itens.sort((a,b)=>a.u.r-b.u.r);
+  return {od,wn,ok,total:tarefas.length,prox:itens[0]||null,itens:itens};
 }
-function fleetStatusHTML(mapa){
-  if(!mapa || !STATE.acmaps[mapa]) return '';
-  const s=fleetStatus(mapa); if(!s) return '';
-  let badges;
-  if(s.od===0 && s.wn===0){ badges='<span class="stok">✓ Tudo em dia</span>'; }
+function _sev(s){ return !s?'na':s.od?'od':s.wn?'wn':'ok'; }
+const _SEVRANK={od:0,wn:1,ok:2,na:3};
+// ----- SASC do mês -----
+const _FERIADOS_FIXOS=['01-01','04-21','05-01','09-07','10-12','11-02','11-15','11-20','12-25'];
+function _diaUtil(d){ const w=d.getDay(); if(w===0||w===6) return false; const k=String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); return !_FERIADOS_FIXOS.includes(k); }
+function _decimoDiaUtil(ano,mes){ const d=new Date(ano,mes,1); let n=0; while(true){ if(_diaUtil(d)){ n++; if(n===10) return new Date(d); } d.setDate(d.getDate()+1); } }
+const _MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+function _rsiRef(){ const h=new Date(); const r=new Date(h.getFullYear(),h.getMonth()-1,1); return {key:r.getFullYear()+'-'+String(r.getMonth()+1).padStart(2,'0'), nome:_MESES[r.getMonth()], prazo:_decimoDiaUtil(h.getFullYear(),h.getMonth())}; }
+function _podeEditar(){ const u=window.CURRENT_USER; return !window.AUTH_ENABLED || !u || u.papel!=='leitor'; }
+function rsiToggle(){
+  const r=_rsiRef(); STATE.rsiEnvios=STATE.rsiEnvios||{};
+  if(STATE.rsiEnvios[r.key]){ if(!window.confirm('Desmarcar o RSI de '+r.nome+' como enviado?')) return; delete STATE.rsiEnvios[r.key]; logAction('Desmarcou RSI como enviado', r.key); }
+  else { STATE.rsiEnvios[r.key]={em:new Date().toISOString(), por:(window.CURRENT_USER&&window.CURRENT_USER.nome)||''}; logAction('Marcou RSI como enviado', r.key); }
+  saveLocal();
+  if(ONLINE && DB){ acDoc('_geral').update({rsiEnvios:STATE.rsiEnvios,updatedAt:new Date().toISOString()}).then(()=>toast('✔ RSI atualizado na nuvem')).catch(e=>toast('⚠ '+(e.message||e))); }
+  drawFleet();
+}
+function _sascMes(){
+  const out=[]; const hoje=new Date(); hoje.setHours(0,0,0,0);
+  // 1) RSI do mês anterior (RBAC 135.417)
+  const r=_rsiRef(); const env=(STATE.rsiEnvios||{})[r.key];
+  const pz=r.prazo.toLocaleDateString('pt-BR');
+  if(env){ out.push({sev:'ok',t:`RSI de ${r.nome} enviado`,s:`Marcado em ${new Date(env.em).toLocaleDateString('pt-BR')}${env.por?' por '+esc(env.por):''} · RBAC 135.417`,act:'desfazer'}); }
   else{
-    badges = (s.od?`<span class="stod">🔴 ${s.od} vencida${s.od>1?'s':''}</span>`:'')
-           + (s.wn?`<span class="stwn">🟠 ${s.wn} próxima${s.wn>1?'s':''}</span>`:'');
+    const atras=hoje>r.prazo; const dias=Math.round((r.prazo-hoje)/86400000);
+    out.push({sev:atras?'od':'wn',t:`RSI de ${r.nome}${atras?' atrasado':''}`,s:`${atras?'Prazo era':'Prazo:'} ${pz} (10º dia útil)${!atras?(dias===0?' · vence hoje':' · faltam '+dias+' dia(s)'):''} · RBAC 135.417`,act:'marcar'});
   }
-  const prox=[];
-  if(s.proxH!=null) prox.push(fmtN(s.proxH,0)+' '+(s.proxHu||'h'));
-  if(s.proxD!=null) prox.push(s.proxD+' dias');
-  const proxTxt = prox.length? `<div class="stprox">⏱ Próxima a vencer em <b>${prox.join(' · ')}</b></div>` : '';
-  return `<div class="acstatus">${badges}${proxTxt}</div>`;
+  // 2) Comitê SASC (reunião trimestral: mar, jun, set, dez)
+  const m=hoje.getMonth(); const trim=[2,5,8,11];
+  if(trim.includes(m)) out.push({sev:'wn',t:'Reunião trimestral do Comitê SASC',s:`Realizar em ${_MESES[m]} · MGM 5.6.2`});
+  else { const nx=trim.find(x=>x>m); const prox=nx==null?2:nx; const vizinho=(prox===(m+1)%12);
+    out.push({sev:vizinho?'wn':'ok',t:'Reunião trimestral do Comitê SASC',s:`${vizinho?'Agendar para':'Próxima em'} ${_MESES[prox]} · MGM 5.6.2`}); }
+  // 3) Níveis de alerta (mesma regra da tela Níveis de Alerta)
+  const cfg=niveisCfg();
+  const cut=new Date(); cut.setMonth(cut.getMonth()-(cfg.janela||12)); const cutISO=cut.toISOString().slice(0,10);
+  const win=(STATE.confiab||[]).filter(x=>(x.data||'')>=cutISO);
+  const byAta={}; win.forEach(x=>{ const k=x.ata||'—'; (byAta[k]=byAta[k]||[]).push(x); });
+  let nV=0,nA=0; Object.values(byAta).forEach(l=>{ if(l.some(x=>_niveisSens(x.tipo))||l.length>=(cfg.vermelho||3)) nV++; else if(l.length>=(cfg.amarelo||2)) nA++; });
+  if(!win.length) out.push({sev:'na',t:'Níveis de alerta sem ocorrências',s:`Nenhuma ocorrência lançada em ${cfg.janela||12} meses · Confiabilidade`,go:'niveis'});
+  else if(nV) out.push({sev:'od',t:`${nV} ATA(s) em vermelho nos níveis de alerta`,s:`${nA?nA+' em amarelo · ':''}Janela de ${cfg.janela||12} meses · por ATA`,go:'niveis'});
+  else if(nA) out.push({sev:'wn',t:`${nA} ATA(s) em amarelo nos níveis de alerta`,s:`Janela de ${cfg.janela||12} meses · por ATA`,go:'niveis'});
+  else out.push({sev:'ok',t:'Níveis de alerta dentro do limite',s:`${win.length} ocorrência(s) em ${cfg.janela||12} meses · por ATA`,go:'niveis'});
+  return out;
 }
 function drawFleet(){
+  const el=$('#view-inicio'); if(!el || !el.dataset.done) return;
   const fleet=STATE.frota||[], ats=window.JETFOR_DASH.atividades;
   // auto-vincula cada card ao mapa correspondente (por matrícula ou modelo)
   fleet.forEach(f=>{ if(!f.mapa){ const k=matchAcmapKey(f); if(k) f.mapa=k; } });
-  const nS=fleet.filter(f=>f.sasc).length, nN=fleet.length-nS;
-  const g=ats.filter(a=>a.escopo==='Geral').length, s=ats.length-g;
-  $('#dashKpis').innerHTML=[['Aeronaves',fleet.length,''],['Frota SASC',nS,'sasc'],['Não-SASC',nN,'non'],['Ativ. gerais',g,''],['Ativ. SASC',s,'sasc']]
-    .map(k=>`<div class="kpi2 ${k[2]}"><div class="n">${k[1]}</div><div class="l">${k[0]}</div></div>`).join('');
-  $('#dashFleet').innerHTML=fleet.map((f,i)=>{
-    const clic=f.mapa?'clik':'';
-    return `<div class="ac ${f.sasc?'sasc':''} ${clic}" data-i="${i}">
-      <div class="ac-top"><div class="mat">${esc(f.mat)}</div>
-        <div class="ac-btns no-print"><button class="acbtn" data-edit="${i}" title="Editar">✎</button><button class="acbtn del" data-del="${i}" title="Remover">🗑</button></div></div>
-      <div class="mod">${esc(f.modelo)}</div>
-      <span class="badge ${f.sasc?'s':'n'}">${f.sasc?'SASC':'NÃO-SASC'}</span>
-      <span class="badge n" style="background:#22406E">${esc(f.enq)}</span>
-      <div class="row"><b>TCDS:</b> ${esc(f.tcds)}</div>
-      <div class="row"><b>Assentos (excl. piloto):</b> ${esc(f.assentos)}</div>
-      <div class="row">${esc(f.obs)}</div>
-      ${fleetStatusHTML(f.mapa)}
-      ${f.mapa?`<div class="verMapa" data-map="${i}">Ver mapa de manutenção →</div>`:`<div class="row" style="color:#b0b6c0">Mapa em breve</div>`}
-    </div>`;}).join('')+`<button class="ac addac no-print" id="btnAddAc">＋<br>Adicionar aeronave</button>`;
+  const rows=fleet.map((f,i)=>{ const s=(f.mapa&&STATE.acmaps[f.mapa])?fleetStatus(f.mapa):null; return {f,i,s,sev:_sev(s)}; });
+  const comMapa=rows.filter(r=>r.s);
+  const totOd=comMapa.reduce((a,r)=>a+r.s.od,0), totWn=comMapa.reduce((a,r)=>a+r.s.wn,0);
+  const emDia=comMapa.filter(r=>r.sev==='ok').length;
+  const nS=fleet.filter(f=>f.sasc).length;
+  const g=ats.filter(a=>a.escopo==='Geral').length, sA=ats.length-g;
+  // cabeçalho
+  const d=new Date(); const dt=d.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  $('#hmDate').textContent=dt.charAt(0).toUpperCase()+dt.slice(1);
+  const odRows=comMapa.filter(r=>r.sev==='od').sort((a,b)=>b.s.od-a.s.od || b.s.wn-a.s.wn || ((a.s.prox&&b.s.prox)? a.s.prox.u.r-b.s.prox.u.r:0));
+  const wnRows=comMapa.filter(r=>r.sev==='wn');
+  let lead;
+  if(odRows.length){ const p=odRows[0]; lead=`<strong>${odRows.length} aeronave${odRows.length>1?'s':''} com itens vencidos.</strong> Comece pela ${esc(p.f.mat)}, que tem ${p.s.od} ${p.s.od>1?'itens vencidos':'item vencido'}${p.s.wn?` e ${p.s.wn} próximo${p.s.wn>1?'s':''} do vencimento`:''}.`; }
+  else if(wnRows.length){ lead=`<b class="hm-wntxt">Nada vencido.</b> ${wnRows.length} aeronave${wnRows.length>1?'s têm':' tem'} itens próximos do vencimento.`; }
+  else lead= comMapa.length? '<b class="hm-oktxt">Toda a frota com mapa está em dia.</b>' : 'Nenhuma aeronave com mapa cadastrado ainda.';
+  $('#hmLead').innerHTML=lead;
+  $('#hmAtv').innerHTML=`${ats.length} atividades cadastradas: ${g} gerais e ${sA} do SASC. <a href="#" id="hmLnkAtv">Ver atividades e frequências →</a>`;
+  $('#hmLnkAtv').addEventListener('click',e=>{e.preventDefault(); switchView('freq');});
+  // KPIs
+  $('#hmKpis').innerHTML=[
+    ['od',totOd,'','Itens vencidos na frota'],
+    ['wn',totWn,'',`Próximos do vencimento (${WARN.h} h · ${WARN.pou} pousos/ciclos · ${WARN.dias} dias)`],
+    ['ok',emDia,` de ${comMapa.length}`,'Aeronaves com mapa totalmente em dia'],
+    ['sasc',nS,` de ${fleet.length}`,'Aeronaves no SASC (≥10 assentos)']
+  ].map(k=>`<div class="hm-kpi ${k[0]}"><div class="n">${k[1]}<small>${k[2]}</small></div><div class="l">${k[3]}</div></div>`).join('');
+  // filtros
+  const nAtt=rows.filter(r=>r.sev==='od'||r.sev==='wn').length;
+  const F=el.dataset.filtro||'all';
+  $('#hmFilters').innerHTML=[['all',`Todas (${fleet.length})`],['att',`Precisam de atenção (${nAtt})`],['sasc',`SASC (${nS})`]]
+    .map(x=>`<button class="hm-chip" type="button" data-f="${x[0]}" aria-pressed="${F===x[0]}">${x[1]}</button>`).join('');
+  $('#hmFilters').querySelectorAll('[data-f]').forEach(b=>b.addEventListener('click',()=>{ el.dataset.filtro=b.dataset.f; drawFleet(); }));
+  // cards (problemas primeiro)
+  const sorted=[...rows].sort((a,b)=>_SEVRANK[a.sev]-_SEVRANK[b.sev] || (a.s&&b.s? (b.s.od-a.s.od) || (b.s.wn-a.s.wn) || ((a.s.prox&&b.s.prox)? a.s.prox.u.r-b.s.prox.u.r:0) : 0));
+  const vis=sorted.filter(r=> F==='att'?(r.sev==='od'||r.sev==='wn') : F==='sasc'? !!r.f.sasc : true);
+  const card=r=>{
+    const f=r.f, s=r.s, i=r.i;
+    const st = r.sev==='na' ? `<span class="hm-st na">${f.mapa?'Sem tarefas':'Sem mapa'}</span>`
+      : r.sev==='od' ? `<span class="hm-st od">${s.od} vencida${s.od>1?'s':''}</span>`
+      : r.sev==='wn' ? `<span class="hm-st wn">${s.wn} próxima${s.wn>1?'s':''}</span>`
+      : '<span class="hm-st ok">Em dia</span>';
+    const pct=n=>(n/s.total*100).toFixed(1)+'%';
+    const body = s ? `
+      <div class="hm-bar" aria-hidden="true"><i class="b-od" style="width:${pct(s.od)}"></i><i class="b-wn" style="width:${pct(s.wn)}"></i><i class="b-ok" style="width:${pct(s.ok)}"></i></div>
+      <div class="hm-legend"><span><b>${s.od}</b> vencidas</span><span><b>${s.wn}</b> próximas</span><span><b>${s.ok}</b> em dia</span></div>
+      ${s.prox?`<div class="hm-next"><div><div class="lbl">Próximo vencimento</div><div class="what">${esc(s.prox.t.nome||'')}</div></div><div class="val ${s.prox.st}">${_fmtDisp(s.prox.u)}</div></div>`:''}
+      <div class="hm-open">Abrir mapa de manutenção →</div>`
+      : `<div class="hm-nomap">${f.mapa?'Mapa sem tarefas cadastradas.':'Mapa ainda não cadastrado. Cadastre para acompanhar os vencimentos desta aeronave.'}</div>`;
+    return `<article class="hm-ac ${s?'clik':''}" tabindex="0" data-i="${i}" data-sev="${r.sev}" aria-label="${esc(f.mat)}, ${esc(f.modelo)}">
+      <div class="hd"><div><div class="mat">${esc(f.mat)}</div><div class="model">${esc(f.modelo)}</div></div>
+        <div class="hdr-right">${st}<button class="hm-kebab no-print" type="button" aria-label="Opções da ${esc(f.mat)}" aria-haspopup="menu">⋯</button>
+          <div class="hm-menu" role="menu" hidden><button type="button" role="menuitem" data-edit="${i}">✎ Editar aeronave</button><button type="button" role="menuitem" class="danger" data-del="${i}">🗑 Remover aeronave</button></div></div></div>
+      <div class="hm-tags"><span class="hm-tag ${f.sasc?'sasc':''}">${f.sasc?'SASC':'Não-SASC'}</span><span class="hm-tag mono">RBAC ${esc(f.enq)}</span></div>
+      ${body}
+      <details class="hm-det"><summary>Detalhes técnicos</summary><dl><dt>TCDS</dt><dd>${esc(f.tcds)}</dd><dt>Assentos (excl. piloto)</dt><dd>${esc(f.assentos)}</dd><dt>Observação</dt><dd>${esc(f.obs)}</dd></dl></details>
+    </article>`;
+  };
+  $('#dashFleet').innerHTML = (vis.length? vis.map(card).join('') : '<div class="hm-empty">Nenhuma aeronave neste filtro.</div>');
   const openFromCard=i=>{ const f=fleet[i]; if(f&&f.mapa&&STATE.acmaps[f.mapa]) openMap(f.mapa); else toast('Mapa ainda não disponível para esta aeronave'); };
-  $('#dashFleet').querySelectorAll('[data-map]').forEach(x=>x.addEventListener('click',e=>{e.stopPropagation();openFromCard(+x.dataset.map);}));
-  $('#dashFleet').querySelectorAll('.ac.clik').forEach(card=>card.addEventListener('click',()=>openFromCard(+card.dataset.i)));
-  $('#dashFleet').querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openAcModal(+b.dataset.edit);}));
-  $('#dashFleet').querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();delAc(+b.dataset.del);}));
-  $('#btnAddAc').addEventListener('click',()=>openAcModal(null));
+  const closeMenus=()=>$('#dashFleet').querySelectorAll('.hm-menu').forEach(m=>m.hidden=true);
+  $('#dashFleet').querySelectorAll('.hm-ac').forEach(c=>{
+    c.addEventListener('click',e=>{
+      if(e.target.closest('.hm-kebab')){ const m=c.querySelector('.hm-menu'); const was=m.hidden; closeMenus(); m.hidden=!was; return; }
+      const ed=e.target.closest('[data-edit]'); if(ed){ closeMenus(); openAcModal(+ed.dataset.edit); return; }
+      const dl=e.target.closest('[data-del]'); if(dl){ closeMenus(); delAc(+dl.dataset.del); return; }
+      if(e.target.closest('details')) return;
+      closeMenus(); if(c.classList.contains('clik')) openFromCard(+c.dataset.i); else toast('Mapa ainda não disponível para esta aeronave');
+    });
+    c.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===c){ e.preventDefault(); c.click(); } });
+  });
+  // próximos vencimentos da frota (vencidos e próximos primeiro; completa com os seguintes)
+  const all=[]; comMapa.forEach(r=>r.s.itens.forEach(x=>all.push(Object.assign({mat:r.f.mat,mapa:r.f.mapa},x))));
+  all.sort((a,b)=>a.u.r-b.u.r);
+  const top=all.slice(0,8);
+  $('#hmDue').innerHTML = top.length ? top.map(x=>`<li data-map="${esc(x.mapa)}" tabindex="0"><span class="m">${esc(x.mat)}</span><span class="t">${esc(x.t.nome||'')}<small>${esc(_taskSub(x.t))}</small></span><span class="v ${x.st}">${_fmtDisp(x.u)}</span></li>`).join('')
+    : '<li class="hm-none">Nenhum vencimento calculado.</li>';
+  $('#hmDue').querySelectorAll('li[data-map]').forEach(li=>{ const go=()=>openMap(li.dataset.map); li.addEventListener('click',go); li.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } }); });
+  // SASC do mês
+  $('#hmSascT').textContent='SASC em '+_MESES[new Date().getMonth()];
+  const pode=_podeEditar();
+  $('#hmSasc').innerHTML=_sascMes().map(x=>`<li><span class="dot ${x.sev}"></span><span class="t">${x.t}<small>${x.s}</small>
+      ${x.act==='marcar'&&pode?'<button class="hm-link no-print" type="button" data-rsi="1">✓ Marcar como enviado</button>':''}
+      ${x.act==='desfazer'&&pode?'<button class="hm-link muted no-print" type="button" data-rsi="1">Desmarcar</button>':''}
+      ${x.go?'<button class="hm-link no-print" type="button" data-go="niveis">Ver níveis de alerta →</button>':''}</span></li>`).join('');
+  $('#hmSasc').querySelectorAll('[data-rsi]').forEach(b=>b.addEventListener('click',rsiToggle));
+  $('#hmSasc').querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{ switchView('sasc'); sascShow('alerta'); }));
 }
 function renderInicio(){
   const D=window.JETFOR_DASH; if(!D) return;
   if(!STATE.frota) STATE.frota=D.fleet.map(x=>Object.assign({},x));
   const el=$('#view-inicio'); if(el.dataset.done){ drawFleet(); return; }
   el.innerHTML=`
-    <div class="kpis2" id="dashKpis"></div>
-    <h2>Frota &amp; Enquadramento SASC</h2>
-    <div class="fleet" id="dashFleet"></div>`;
-  drawFleet();
+    <section class="hm-top">
+      <div>
+        <div class="hm-date" id="hmDate"></div>
+        <h1>Frota JetFor</h1>
+        <p class="hm-lead" id="hmLead"></p>
+        <p class="hm-atv" id="hmAtv"></p>
+      </div>
+      <button class="hm-btn primary no-print" id="btnAddAc" type="button">＋ Adicionar aeronave</button>
+    </section>
+    <section class="hm-kpis" id="hmKpis" aria-label="Resumo da frota"></section>
+    <div class="hm-grid">
+      <section aria-labelledby="hmFrotaH">
+        <div class="hm-sech"><h2 id="hmFrotaH">Aeronaves</h2><div class="hm-filters no-print" id="hmFilters" role="group" aria-label="Filtrar aeronaves"></div></div>
+        <div class="hm-fleet" id="dashFleet"></div>
+      </section>
+      <aside class="hm-side">
+        <section class="hm-panel" aria-labelledby="hmDueH"><h3 id="hmDueH">Próximos vencimentos</h3><ul class="hm-due" id="hmDue"></ul></section>
+        <section class="hm-panel" aria-labelledby="hmSascT"><h3 id="hmSascT">SASC do mês</h3><ul class="hm-ob" id="hmSasc"></ul></section>
+      </aside>
+    </div>`;
+  $('#btnAddAc').addEventListener('click',()=>openAcModal(null));
+  document.addEventListener('click',e=>{ if(!e.target.closest('.hdr-right')) document.querySelectorAll('#dashFleet .hm-menu').forEach(m=>m.hidden=true); });
   el.dataset.done='1';
+  drawFleet();
 }
 
 function renderFreq(){
@@ -1857,7 +1990,8 @@ function boot(){
     docCatsGeral: (local&&local.docCatsGeral) || [],
     oficinas: (local&&local.oficinas) || [],
     confiab: (local&&local.confiab) || [],
-    confiabCfg: (local&&local.confiabCfg) || {janela:12,amarelo:2,vermelho:3,horas:''}
+    confiabCfg: (local&&local.confiabCfg) || {janela:12,amarelo:2,vermelho:3,horas:''},
+    rsiEnvios: (local&&local.rsiEnvios) || {}
   };
   migrateMapsFull();
   STATE.contadores=STATE.acmaps[currentAC].contadores; STATE.tarefas=STATE.acmaps[currentAC].tarefas;
