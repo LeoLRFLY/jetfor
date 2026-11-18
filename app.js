@@ -108,15 +108,30 @@ function logAction(acao, detalhe){
 }
 
 async function saveAll(){
+  // v71: sem nenhuma permissão de alteração, não grava nada (nem no aparelho)
+  if(typeof podeAlgumaAlteracao==='function' && window.AUTH_ENABLED && !podeAlgumaAlteracao()){ toast('🔒 Seu acesso é só de leitura. Nada foi salvo.'); return; }
   saveLocal();
   if(ONLINE && DB){
     try{
       SUPPRESS=true;
-      const m=cur();
-      await acDoc(STATE.currentAC).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),docs:(m.docs||[]),docCatsExtra:(m.docCatsExtra||[]),grupos:(m.grupos||[]),baixas:(m.baixas||[]),updatedAt:new Date().toISOString()});
+      const m=cur(), ac=STATE.currentAC, now=new Date().toISOString();
+      const P=(typeof pode==='function')?{
+        mapa:podeAlterar('mapa',ac), docs:podeAlterar('docsac',ac), geral:podeAlterar('geral'),
+        mapaG:podeAlterar('mapa'), frota:podeAlterar('frota'), of:podeAlterar('oficinas')
+      }:{mapa:true,docs:true,geral:true,mapaG:true,frota:true,of:true};
+      // documento da aeronave
+      const fMapa={aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),grupos:(m.grupos||[]),baixas:(m.baixas||[])};
+      const fDocs={docs:(m.docs||[]),docCatsExtra:(m.docCatsExtra||[])};
+      if(P.mapa && P.docs) await acDoc(ac).set(Object.assign({},fMapa,fDocs,{updatedAt:now}));
+      else if(P.mapa) await acDoc(ac).update(Object.assign({},fMapa,{updatedAt:now}));
+      else if(P.docs) await acDoc(ac).update(Object.assign({},fDocs,{updatedAt:now}));
       // merge:true → regrava só estes campos; NÃO apaga confiab, confiabCfg e rsiEnvios gravados por outras telas
-      await acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),docCatsGeral:(STATE.docCatsGeral||[]),updatedAt:new Date().toISOString()},{merge:true});
-      await acDoc('_oficinas').set({oficinas:(STATE.oficinas||[]),updatedAt:new Date().toISOString()});
+      const g={};
+      if(P.frota) g.frota=STATE.frota;
+      if(P.mapaG){ g.hoje=STATE.hoje; g.osProx=(STATE.osProx||{}); }
+      if(P.geral){ g.docsGeral=(STATE.docsGeral||[]); g.docCatsGeral=(STATE.docCatsGeral||[]); }
+      if(Object.keys(g).length){ g.updatedAt=now; await acDoc('_geral').set(g,{merge:true}); }
+      if(P.of) await acDoc('_oficinas').set({oficinas:(STATE.oficinas||[]),updatedAt:now});
       SUPPRESS=false;
       toast('✔ Salvo no Firebase (nuvem)');
     }catch(e){ SUPPRESS=false; toast('⚠ Erro ao salvar na nuvem — salvo local'); console.error(e); }
@@ -149,7 +164,7 @@ function loadCloudData(){
   if(_cloudLoaded || !DB) return; _cloudLoaded=true;
   // dados gerais (frota/hoje)
   acDoc('_geral').get().then(snap=>{
-    if(!snap.exists){ acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),updatedAt:new Date().toISOString()}); }
+    if(!snap.exists){ if(typeof podeAlterar==='function' && !podeAlterar('mapa')) return; acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),updatedAt:new Date().toISOString()}); }
     else { const d=snap.data()||{}; if(d.osProx) STATE.osProx=d.osProx; if(d.docsGeral) STATE.docsGeral=d.docsGeral; if(d.docCatsGeral) STATE.docCatsGeral=d.docCatsGeral; if(Array.isArray(d.confiab)) STATE.confiab=d.confiab; if(d.confiabCfg) STATE.confiabCfg=d.confiabCfg; if(d.rsiEnvios){ STATE.rsiEnvios=d.rsiEnvios; if($('#view-inicio').dataset.done) drawFleet(); } if(d.frota){ STATE.frota=d.frota; if($('#view-inicio').dataset.done) drawFleet(); } if($('#view-geral') && $('#view-geral').style.display!=='none') renderDocsGeral(); const cv=$('#view-confiab'); if(cv && cv.style.display!=='none') renderConfiabList(); }
   }).catch(()=>{});
   acDoc('_oficinas').get().then(snap=>{
@@ -162,8 +177,10 @@ function loadCloudData(){
 function seedAllAC(){
   if(!ONLINE||!DB) return;
   Object.keys(STATE.acmaps||{}).forEach(ac=>{
+    if(typeof acVisivel==='function' && !acVisivel(ac)) return;
     acDoc(ac).get().then(snap=>{
       if(!snap.exists){
+        if(typeof podeAlterar==='function' && !podeAlterar('mapa',ac)) return;
         const m=STATE.acmaps[ac];
         acDoc(ac).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),updatedAt:new Date().toISOString()})
           .catch(e=>console.error('seed '+ac,e));
@@ -182,8 +199,9 @@ function seedAllAC(){
 function subscribeAC(ac){
   if(!ONLINE||!DB) return;
   if(SNAP_UNSUB){ SNAP_UNSUB(); SNAP_UNSUB=null; }
+  if(typeof acVisivel==='function' && !acVisivel(ac)) return;
   acDoc(ac).get().then(snap=>{
-    if(!snap.exists){ const m=STATE.acmaps[ac]; acDoc(ac).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,updatedAt:new Date().toISOString()}); }
+    if(!snap.exists){ if(typeof podeAlterar==='function' && !podeAlterar('mapa',ac)) return; const m=STATE.acmaps[ac]; acDoc(ac).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,updatedAt:new Date().toISOString()}); }
   }).catch(()=>{});
   SNAP_UNSUB=acDoc(ac).onSnapshot(snap=>{
     if(SUPPRESS) return;
@@ -1288,11 +1306,13 @@ function drawFleet(){
   const fleet=STATE.frota||[], ats=window.JETFOR_DASH.atividades;
   // auto-vincula cada card ao mapa correspondente (por matrícula ou modelo)
   fleet.forEach(f=>{ if(!f.mapa){ const k=matchAcmapKey(f); if(k) f.mapa=k; } });
-  const rows=fleet.map((f,i)=>{ const s=(f.mapa&&STATE.acmaps[f.mapa])?fleetStatus(f.mapa):null; return {f,i,s,sev:_sev(s)}; });
+  // v71: só as aeronaves liberadas para o usuário (permissões por aeronave)
+  const _acOkF=f=>(typeof acVisivel!=='function') || acVisivel(f.mapa||f.mat);
+  const rows=fleet.map((f,i)=>{ const s=(f.mapa&&STATE.acmaps[f.mapa])?fleetStatus(f.mapa):null; return {f,i,s,sev:_sev(s)}; }).filter(r=>_acOkF(r.f));
   const comMapa=rows.filter(r=>r.s);
   const totOd=comMapa.reduce((a,r)=>a+r.s.od,0), totWn=comMapa.reduce((a,r)=>a+r.s.wn,0);
   const emDia=comMapa.filter(r=>r.sev==='ok').length;
-  const nS=fleet.filter(f=>f.sasc).length;
+  const nS=rows.filter(r=>r.f.sasc).length;
   const g=ats.filter(a=>a.escopo==='Geral').length, sA=ats.length-g;
   // cabeçalho
   const d=new Date(); const dt=d.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
@@ -1311,12 +1331,12 @@ function drawFleet(){
     ['od',totOd,'','Itens vencidos na frota'],
     ['wn',totWn,'',`Próximos do vencimento (${WARN.h} h · ${WARN.pou} pousos/ciclos · ${WARN.dias} dias)`],
     ['ok',emDia,` de ${comMapa.length}`,'Aeronaves com mapa totalmente em dia'],
-    ['sasc',nS,` de ${fleet.length}`,'Aeronaves no SASC (≥10 assentos)']
+    ['sasc',nS,` de ${rows.length}`,'Aeronaves no SASC (≥10 assentos)']
   ].map(k=>`<div class="hm-kpi ${k[0]}"><div class="n">${k[1]}<small>${k[2]}</small></div><div class="l">${k[3]}</div></div>`).join('');
   // filtros
   const nAtt=rows.filter(r=>r.sev==='od'||r.sev==='wn').length;
   const F=el.dataset.filtro||'all';
-  $('#hmFilters').innerHTML=[['all',`Todas (${fleet.length})`],['att',`Precisam de atenção (${nAtt})`],['sasc',`SASC (${nS})`]]
+  $('#hmFilters').innerHTML=[['all',`Todas (${rows.length})`],['att',`Precisam de atenção (${nAtt})`],['sasc',`SASC (${nS})`]]
     .map(x=>`<button class="hm-chip" type="button" data-f="${x[0]}" aria-pressed="${F===x[0]}">${x[1]}</button>`).join('');
   $('#hmFilters').querySelectorAll('[data-f]').forEach(b=>b.addEventListener('click',()=>{ el.dataset.filtro=b.dataset.f; drawFleet(); }));
   // cards (problemas primeiro)
@@ -1957,11 +1977,13 @@ function buildMapaSubtabs(){
 // ---------- trocar de aeronave ----------
 function fillAcSwitch(){
   const sel=$('#acSwitch'); if(!sel) return;
-  const acs=Object.keys(STATE.acmaps||{}).filter(k=>STATE.acmaps[k]&&STATE.acmaps[k].aeronave);
+  const acs=Object.keys(STATE.acmaps||{}).filter(k=>STATE.acmaps[k]&&STATE.acmaps[k].aeronave&&(typeof acVisivel!=='function'||acVisivel(k)));
   sel.innerHTML=acs.map(k=>{ const a=STATE.acmaps[k].aeronave||{}; return `<option value="${esc(k)}" ${k===STATE.currentAC?'selected':''}>✈ ${esc(a.matricula||k)} — ${esc(a.modelo||'')}</option>`; }).join('');
 }
 function openMap(ac){
   if(!ac || !STATE.acmaps[ac]){ toast('Mapa ainda não disponível para esta aeronave'); return; }
+  if(typeof acVisivel==='function' && !acVisivel(ac)){ toast('🔒 Você não tem acesso à aeronave '+ac+'.'); return; }
+  if(typeof pode==='function' && !pode('mapa','v')){ toast('🔒 Você não tem acesso ao Mapa de Manutenção.'); return; }
   STATE.currentAC=ac;
   const m=cur(); STATE.contadores=m.contadores; STATE.tarefas=m.tarefas;
   const a=m.aeronave||{};
@@ -2051,6 +2073,7 @@ function renderForms(){
 }
 
 function switchView(v){
+  if(typeof pode==='function' && window.PERM_TELAS && PERM_TELAS.some(t=>t.k===v && !t.adm) && !pode(v,'v')){ toast('🔒 Você não tem acesso a esta tela.'); return; }
   document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   { const cv=$('#view-confiab'); if(cv) cv.style.display='none'; }
   $('#view-inicio').style.display = v==='inicio'?'':'none';
