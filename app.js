@@ -45,12 +45,21 @@ function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('sh
 
 // ---------- CÁLCULO (replica as fórmulas do Excel) ----------
 function compute(task){ return computeWith(task, STATE.contadores, STATE.hoje||todayISO()); }
+// TSO/CSO "NEW": motor/hélice que ainda não fez o 1º overhaul → o tempo desde overhaul é o tempo desde novo.
+// Ex.: TBO 3.600 FH, TSN 3.000, TSO NEW → saldo 600 FH. Depois do overhaul, digita o TSO real e ele passa a valer.
+function isNew(v){ return typeof v==='string' && v.trim().toUpperCase()==='NEW'; }
+function newFallback(base){ const m=/^(motor|helice)(\d+)_(tso|cso)$/.exec(base||''); return m ? m[1]+m[2]+'_'+(m[3]==='tso'?'tsn':'csn') : null; }
+function ctrVal(CT, base){
+  CT=CT||{}; const v=CT[base];
+  if(isNew(v)){ const fb=newFallback(base); return fb ? num(CT[fb]) : null; }
+  return (v==null||v==='') ? null : num(v);
+}
 function computeWith(task, CT, hoje){
   CT = CT||{}; hoje = hoje||todayISO();
   const r = { num:null, cal:null, status:'ok' };
   // parte numérica (horas/pousos/ciclos)
   if(task.base && task.base!=='calendario'){
-    const counter = CT[task.base];
+    const counter = ctrVal(CT, task.base);   // resolve TSO/CSO NEW → TSN/CSN
     let venc = null;
     if(task.intervalo!=null && task.exec!=null) venc = task.exec + task.intervalo;   // VENC = EXEC + INTERVALO
     else if(task.vencFixo!=null) venc = task.vencFixo;                                // limite fixo (LLP)
@@ -312,15 +321,38 @@ function renderCounters(){
     const div=document.createElement('div'); div.className='cgroup';
     let html=`<div class="ctitle"><span class="dot" style="background:${grp.dot}"></span>${grp.title}</div>`;
     grp.fields.forEach(([k,lab])=>{
-      const val = STATE.contadores[k]!=null ? STATE.contadores[k] : '';
-      html+=`<div class="cfield"><label>${lab}</label><input type="number" step="any" data-ctr="${k}" value="${val}"></div>`;
+      const raw = STATE.contadores[k];
+      const canNew = /_(tso|cso)$/.test(k);           // TSO/CSO podem ser NEW (sem 1º overhaul)
+      const nw = canNew && isNew(raw);
+      const val = nw ? 'NEW' : (raw!=null && raw!=='' ? raw : '');
+      const btn = canNew ? `<button type="button" class="newbtn${nw?' on':''}" data-new="${k}" title="${nw?'Desmarcar NEW e digitar o valor desde o overhaul':'Ainda sem o 1º overhaul: marcar NEW (conta pelo '+(k.endsWith('_tso')?'TSN':'CSN')+')'}">NEW</button>` : '';
+      const inp = nw ? `<input type="text" class="isnew" value="NEW" readonly tabindex="-1" title="Sem o 1º overhaul — as tarefas contam pelo ${k.endsWith('_tso')?'TSN':'CSN'}">`
+                     : `<input type="number" step="any" data-ctr="${k}" value="${val}">`;
+      html+=`<div class="cfield"><label>${lab}</label><span class="cinp">${btn}${inp}</span></div>`;
     });
     if(grp.note && info[grp.note]) html+=`<div class="cnote">${info[grp.note]}</div>`;
     div.innerHTML=html; g.appendChild(div);
   });
   g.querySelectorAll('input[data-ctr]').forEach(inp=>{
-    inp.addEventListener('input',()=>{ STATE.contadores[inp.dataset.ctr]=num(inp.value); renderTable(); saveLocalDebounced(); });
+    const k=inp.dataset.ctr;
+    inp.addEventListener('focus',()=>{ inp.dataset.old = (STATE.contadores[k]==null||STATE.contadores[k]==='') ? '' : String(STATE.contadores[k]); });
+    inp.addEventListener('input',()=>{ STATE.contadores[k]=num(inp.value); renderTable(); saveLocalDebounced(); });
+    // propagação: só quando termina de digitar (sair do campo / Enter), nunca a cada tecla
+    inp.addEventListener('change',()=>{
+      if(!/^celula_(horas|ciclos|pousos)$/.test(k)) return;
+      const oldV = inp.dataset.old==='' || inp.dataset.old==null ? null : num(inp.dataset.old);
+      inp.dataset.old = STATE.contadores[k]==null ? '' : String(STATE.contadores[k]);
+      propagarCelula(k, oldV, STATE.contadores[k]);
+    });
   });
+  g.querySelectorAll('[data-new]').forEach(b=>b.addEventListener('click',()=>{
+    const k=b.dataset.new; const C=STATE.contadores;
+    const lbl=(k.startsWith('motor')?'Motor ':'Hélice ')+(k.match(/\d+/)||[''])[0]+' '+(k.endsWith('_tso')?'TSO':'CSO');
+    if(isNew(C[k])){ C[k]=null; toast('NEW desmarcado: digite o '+(k.endsWith('_tso')?'TSO':'CSO')+' desde o overhaul'); logAction('Desmarcou NEW no contador', STATE.currentAC+' · '+lbl); }
+    else { C[k]='NEW'; toast('✔ '+lbl+' = NEW · as tarefas contam pelo '+(k.endsWith('_tso')?'TSN':'CSN')); logAction('Marcou NEW no contador', STATE.currentAC+' · '+lbl); }
+    renderCounters(); renderTable(); saveLocalDebounced();
+    if(!isNew(C[k])){ const i=$('#cgrid input[data-ctr="'+k+'"]'); if(i) i.focus(); }
+  }));
   $('#hoje').value = STATE.hoje||todayISO();
   // resumo compacto (mostrado quando os contadores estão recolhidos)
   const rz=$('#ctResumo'); if(rz){ const C=STATE.contadores||{}; const p=[];
@@ -329,6 +361,74 @@ function renderCounters(){
     if(C.celula_ciclos!=null) p.push(fmtN(C.celula_ciclos,0)+' ciclos');
     rz.textContent = p.length? ('✈ '+p.join(' · ')) : '';
   }
+}
+
+// ---------- propagação célula → motores/hélices ----------
+// Horas da célula → TSN/TSO de motores e hélices. Ciclos dos motores (CSN/CSO) acompanham os CICLOS da célula
+// quando ela tem ciclos (≠ 0); se não tiver, acompanham os POUSOS. Pousos não mudam nada nos motores quando há ciclos.
+// Valor anterior vazio ou 0 na célula = primeiro cadastro → não propaga. Campo do motor vazio ou NEW → fica como está.
+function _propAlvos(k){
+  const C=STATE.contadores; const ac=(cur()&&cur().aeronave)||{};
+  const nM = ac.nMotores!=null? ac.nMotores : 2, nH = ac.nHelices!=null? ac.nHelices : 0;
+  const temCiclos = num(C.celula_ciclos)!=null && num(C.celula_ciclos)!==0;
+  const units=[];
+  if(k==='celula_horas'){
+    for(let i=1;i<=nM;i++) units.push({nome:'Motor '+i, campos:[['motor'+i+'_tsn','TSN'],['motor'+i+'_tso','TSO']]});
+    for(let i=1;i<=nH;i++) units.push({nome:'Hélice '+i, campos:[['helice'+i+'_tsn','TSN'],['helice'+i+'_tso','TSO']]});
+  } else if(k==='celula_ciclos' || (k==='celula_pousos' && !temCiclos)){
+    for(let i=1;i<=nM;i++) units.push({nome:'Motor '+i, campos:[['motor'+i+'_csn','CSN'],['motor'+i+'_cso','CSO']]});
+  }
+  return units;
+}
+function propagarCelula(k, oldV, newV){
+  if(oldV==null || oldV===0 || newV==null) return;          // primeiro cadastro: nada a somar
+  const isH = k==='celula_horas';
+  const d = isH ? +(newV-oldV).toFixed(1) : Math.round(newV-oldV);
+  if(!d) return;
+  const C=STATE.contadores;
+  const units=_propAlvos(k).map(u=>{
+    const linhas=u.campos.map(([ck,cl])=>{
+      if(isNew(C[ck])) return {ck,cl,skip:'NEW — continua NEW'};
+      if(C[ck]==null || C[ck]==='') return {ck,cl,skip:'vazio — não altera'};
+      const de=num(C[ck]); const para=isH? +(de+d).toFixed(1) : de+d;
+      return {ck,cl,de,para};
+    });
+    return {nome:u.nome, linhas, aplicavel:linhas.some(l=>!l.skip)};
+  }).filter(u=>u.aplicavel);
+  if(!units.length) return;
+  const nomeCampo={celula_horas:'Horas', celula_ciclos:'Ciclos', celula_pousos:'Pousos'}[k];
+  const alvoTxt = units.some(u=>u.nome.startsWith('Hélice')) ? 'motores e hélices' : 'motores';
+  const un = isH?'FH':(k==='celula_pousos'?'pousos':'ciclos');
+  const fmt = v => isH ? fmtN(v,1) : fmtN(v,0);
+  const sinal = d>0?'+':'−';
+  const aviso = d<0 ? `<div class="cfbnote" style="border-left-color:var(--od);background:#fdecea;border-color:#f3c2bd;margin:0 0 12px"><b>Atenção: você está DIMINUINDO a célula em ${fmt(-d)} ${un}.</b> Deseja alterar também os ${alvoTxt}?</div>` : '';
+  const extra = (k==='celula_pousos') ? '<div class="hint" style="margin:-4px 0 10px">Como a célula não tem ciclos preenchidos, os pousos alimentam os ciclos dos motores.</div>' : '';
+  let ov=$('#propOverlay');
+  if(!ov){ ov=document.createElement('div'); ov.className='overlay'; ov.id='propOverlay'; document.body.appendChild(ov); }
+  ov.innerHTML=`<div class="modal" style="width:560px;max-width:100%">
+    <h3>Levar a diferença da célula para os ${alvoTxt}?</h3>
+    <div class="mbody" style="display:block">
+      ${aviso}
+      <p class="lead" style="margin:0 0 10px">Célula · ${nomeCampo}: <b>${fmt(oldV)} → ${fmt(newV)}</b> (<b>${sinal}${fmt(Math.abs(d))} ${un}</b>). Aplicar a mesma diferença em:</p>
+      ${extra}
+      ${units.map((u,i)=>`<label class="propu"><input type="checkbox" data-pu="${i}" checked><span><b>${u.nome}</b><span class="propl">${u.linhas.map(l=> l.skip? `${l.cl}: <i>${l.skip}</i>` : `${l.cl} ${fmt(l.de)} → <b>${fmt(l.para)}</b>`).join(' · ')}</span></span></label>`).join('')}
+      <div class="hint" style="margin-top:8px">Desmarque um motor ou hélice que não acompanhou a célula (ex.: removido ou trocado).</div>
+    </div>
+    <div class="mfoot"><button class="btn o" id="propUndo" title="Volta a célula para ${fmt(oldV)}">Desfazer alteração da célula</button>
+      <div style="display:flex;gap:8px"><button class="btn o" id="propSo">Só a célula</button><button class="btn p" id="propOk">Aplicar</button></div></div>
+  </div>`;
+  ov.classList.add('show');
+  const fechar=()=>ov.classList.remove('show');
+  $('#propSo').onclick=()=>{ fechar(); logAction('Atualizou contador da célula (sem propagar)', STATE.currentAC+' · '+nomeCampo+' '+sinal+fmt(Math.abs(d))+' '+un); };
+  $('#propUndo').onclick=()=>{ C[k]=oldV; fechar(); renderCounters(); renderTable(); saveLocalDebounced(); toast('Alteração da célula desfeita'); };
+  $('#propOk').onclick=()=>{
+    const feitos=[];
+    ov.querySelectorAll('[data-pu]').forEach(cb=>{ if(!cb.checked) return; const u=units[+cb.dataset.pu];
+      u.linhas.forEach(l=>{ if(!l.skip) C[l.ck]=l.para; }); feitos.push(u.nome); });
+    fechar(); renderCounters(); renderTable(); saveLocalDebounced();
+    if(feitos.length){ toast('✔ '+sinal+fmt(Math.abs(d))+' '+un+' aplicado em '+feitos.join(', ')); logAction('Atualizou contadores (célula → componentes)', STATE.currentAC+' · '+nomeCampo+' '+sinal+fmt(Math.abs(d))+' '+un+' → '+feitos.join(', ')); }
+    else logAction('Atualizou contador da célula (sem propagar)', STATE.currentAC+' · '+nomeCampo+' '+sinal+fmt(Math.abs(d))+' '+un);
+  };
 }
 let _lsT=null; function saveLocalDebounced(){ clearTimeout(_lsT); _lsT=setTimeout(saveLocal,500); }
 
@@ -401,7 +501,9 @@ function openBaixa(fresh){
   let rd='';
   groups.forEach(g=>{
     rd+=`<div class="bxgroup"><div class="ctitle"><span class="dot" style="background:${g.dot}"></span>${g.title}</div><div class="bxfields">`;
-    g.fields.forEach(([k,lab])=>{ const atual=STATE.contadores[k]!=null?STATE.contadores[k]:''; const v=(last&&last.readings&&last.readings[k]!=null&&last.readings[k]!=='')?last.readings[k]:atual; rd+=`<label class="bxfield">${lab}<input type="number" step="any" data-bx="${k}" value="${v}"></label>`; });
+    g.fields.forEach(([k,lab])=>{
+      if(isNew(STATE.contadores[k])){ rd+=`<label class="bxfield">${lab}<input type="text" data-bx="${k}" value="NEW" readonly title="Sem o 1º overhaul: tarefas por ${k.endsWith('_tso')?'TSO usam o TSN':'CSO usam o CSN'}"></label>`; return; }
+      const atual=STATE.contadores[k]!=null?STATE.contadores[k]:''; const v=(last&&last.readings&&last.readings[k]!=null&&last.readings[k]!=='')?last.readings[k]:atual; rd+=`<label class="bxfield">${lab}<input type="number" step="any" data-bx="${k}" value="${v}"></label>`; });
     rd+='</div></div>';
   });
   const hint = last ? `<div class="cfbnote" style="margin:0 0 10px"><b>↻ Reaproveitando a última baixa desta aeronave</b>${last.data?' — '+fmtDate(new Date(last.data+'T00:00:00')):''}${last.ref?' · '+esc(last.ref):''}. Confira e aplique (ideal para quando esqueceu um item). <a href="#" onclick="openBaixa(true);return false">Limpar e começar do zero</a></div>` : '';
@@ -420,7 +522,10 @@ function _baixaApply(ids,data,ref,readings){
   ids.forEach(id=>{
     const t=m.tarefas.find(x=>x.id===id); if(!t) return;
     let upd=false, leitura=null;
-    if(t.base && t.base!=='calendario' && t.intervalo!=null && readings[t.base]!=null){ t.exec=readings[t.base]; leitura=readings[t.base]; upd=true; }
+    // TSO/CSO em NEW: a leitura da tarefa é a do TSN/CSN (tempo desde novo)
+    let rv = readings[t.base];
+    if(rv==null && t.base){ const fb=newFallback(t.base); if(fb && isNew(STATE.contadores[t.base])) rv=readings[fb]; }
+    if(t.base && t.base!=='calendario' && t.intervalo!=null && rv!=null){ t.exec=rv; leitura=rv; upd=true; }
     if(t.cal){ t.cal.exec=data; upd=true; }
     if(ref){ t.obs=ref; }   // oficina executante vai para o campo Observações
     if(upd){ t.hist=t.hist||[]; t.hist.push({data:data, oficina:ref||'', leitura:leitura, base:t.base, cal:!!t.cal}); n++; tarefas.push({id:t.id,nome:t.nome,base:t.base,leitura:leitura}); } else skip++;
