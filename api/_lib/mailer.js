@@ -1,6 +1,6 @@
 /* JetFor · envio de e-mail pelo Google Workspace (contato@lrfly.com.br).
    Variáveis (Vercel → Settings → Environment Variables):
-     SMTP_USER   conta que envia, ex.: contato@lrfly.com.br
+     SMTP_USER   conta REAL do Google que faz login (ex.: leonardo@lrfly.com.br; contato@ é apelido dela)
      SMTP_PASS   SENHA DE APP do Google (16 letras), NÃO a senha normal da conta
                  (Conta Google → Segurança → Verificação em duas etapas → Senhas de app)
      EMAIL_FROM  (opcional) nome + endereço que aparece, ex.: "JetFor Manutenção <contato@lrfly.com.br>"
