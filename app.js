@@ -114,7 +114,8 @@ async function saveAll(){
       SUPPRESS=true;
       const m=cur();
       await acDoc(STATE.currentAC).set({aeronave:m.aeronave,contadores:m.contadores,tarefas:m.tarefas,da:m.da,osHistorico:(m.osHistorico||[]),docs:(m.docs||[]),docCatsExtra:(m.docCatsExtra||[]),grupos:(m.grupos||[]),baixas:(m.baixas||[]),updatedAt:new Date().toISOString()});
-      await acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),docCatsGeral:(STATE.docCatsGeral||[]),updatedAt:new Date().toISOString()});
+      // merge:true → regrava só estes campos; NÃO apaga confiab, confiabCfg e rsiEnvios gravados por outras telas
+      await acDoc('_geral').set({frota:STATE.frota,hoje:STATE.hoje,osProx:(STATE.osProx||{}),docsGeral:(STATE.docsGeral||[]),docCatsGeral:(STATE.docCatsGeral||[]),updatedAt:new Date().toISOString()},{merge:true});
       await acDoc('_oficinas').set({oficinas:(STATE.oficinas||[]),updatedAt:new Date().toISOString()});
       SUPPRESS=false;
       toast('✔ Salvo no Firebase (nuvem)');
@@ -336,7 +337,7 @@ function renderCounters(){
   g.querySelectorAll('input[data-ctr]').forEach(inp=>{
     const k=inp.dataset.ctr;
     inp.addEventListener('focus',()=>{ inp.dataset.old = (STATE.contadores[k]==null||STATE.contadores[k]==='') ? '' : String(STATE.contadores[k]); });
-    inp.addEventListener('input',()=>{ STATE.contadores[k]=num(inp.value); renderTable(); saveLocalDebounced(); });
+    inp.addEventListener('input',()=>{ STATE.contadores[k]=num(inp.value); renderTable(); saveLocalDebounced(); saveCountersCloudDebounced(); });
     // propagação: só quando termina de digitar (sair do campo / Enter), nunca a cada tecla
     inp.addEventListener('change',()=>{
       if(!/^celula_(horas|ciclos|pousos)$/.test(k)) return;
@@ -350,7 +351,7 @@ function renderCounters(){
     const lbl=(k.startsWith('motor')?'Motor ':'Hélice ')+(k.match(/\d+/)||[''])[0]+' '+(k.endsWith('_tso')?'TSO':'CSO');
     if(isNew(C[k])){ C[k]=null; toast('NEW desmarcado: digite o '+(k.endsWith('_tso')?'TSO':'CSO')+' desde o overhaul'); logAction('Desmarcou NEW no contador', STATE.currentAC+' · '+lbl); }
     else { C[k]='NEW'; toast('✔ '+lbl+' = NEW · as tarefas contam pelo '+(k.endsWith('_tso')?'TSN':'CSN')); logAction('Marcou NEW no contador', STATE.currentAC+' · '+lbl); }
-    renderCounters(); renderTable(); saveLocalDebounced();
+    renderCounters(); renderTable(); saveLocalDebounced(); saveCountersCloudDebounced();
     if(!isNew(C[k])){ const i=$('#cgrid input[data-ctr="'+k+'"]'); if(i) i.focus(); }
   }));
   $('#hoje').value = STATE.hoje||todayISO();
@@ -420,17 +421,29 @@ function propagarCelula(k, oldV, newV){
   ov.classList.add('show');
   const fechar=()=>ov.classList.remove('show');
   $('#propSo').onclick=()=>{ fechar(); logAction('Atualizou contador da célula (sem propagar)', STATE.currentAC+' · '+nomeCampo+' '+sinal+fmt(Math.abs(d))+' '+un); };
-  $('#propUndo').onclick=()=>{ C[k]=oldV; fechar(); renderCounters(); renderTable(); saveLocalDebounced(); toast('Alteração da célula desfeita'); };
+  $('#propUndo').onclick=()=>{ C[k]=oldV; fechar(); renderCounters(); renderTable(); saveLocalDebounced(); saveCountersCloudDebounced(); toast('Alteração da célula desfeita'); };
   $('#propOk').onclick=()=>{
     const feitos=[];
     ov.querySelectorAll('[data-pu]').forEach(cb=>{ if(!cb.checked) return; const u=units[+cb.dataset.pu];
       u.linhas.forEach(l=>{ if(!l.skip) C[l.ck]=l.para; }); feitos.push(u.nome); });
-    fechar(); renderCounters(); renderTable(); saveLocalDebounced();
+    fechar(); renderCounters(); renderTable(); saveLocalDebounced(); saveCountersCloudDebounced();
     if(feitos.length){ toast('✔ '+sinal+fmt(Math.abs(d))+' '+un+' aplicado em '+feitos.join(', ')); logAction('Atualizou contadores (célula → componentes)', STATE.currentAC+' · '+nomeCampo+' '+sinal+fmt(Math.abs(d))+' '+un+' → '+feitos.join(', ')); }
     else logAction('Atualizou contador da célula (sem propagar)', STATE.currentAC+' · '+nomeCampo+' '+sinal+fmt(Math.abs(d))+' '+un);
   };
 }
 let _lsT=null; function saveLocalDebounced(){ clearTimeout(_lsT); _lsT=setTimeout(saveLocal,500); }
+// contadores vão sozinhos para a nuvem ~1,5 s depois da última alteração (grava SÓ os contadores da aeronave)
+let _ctrT=null, _ctrAC=null;
+function saveCountersCloudDebounced(){ clearTimeout(_ctrT); _ctrAC=STATE.currentAC; _ctrT=setTimeout(()=>saveCountersCloud(_ctrAC),1500); }
+function saveCountersCloud(ac){
+  ac = ac || STATE.currentAC; const m = STATE.acmaps && STATE.acmaps[ac]; if(!m) return;
+  saveLocal();
+  if(!(ONLINE && DB)) return;
+  SUPPRESS=true;
+  acDoc(ac).set({contadores:m.contadores, updatedAt:new Date().toISOString()},{merge:true})
+    .then(()=>{ SUPPRESS=false; toast('✔ Horas salvas na nuvem'+(ac!==STATE.currentAC?' ('+ac+')':'')); })
+    .catch(e=>{ SUPPRESS=false; console.error(e); toast(/permission/i.test(String(e&&e.message||e)) ? '⚠ Seu usuário não tem permissão para salvar na nuvem (só neste navegador)' : '⚠ Não salvou na nuvem — clique em 💾 Salvar'); });
+}
 
 // ---------- TABELA (render) ----------
 function renderTable(){
