@@ -31,20 +31,22 @@ function limparAcs(a){
   if(!Array.isArray(a)) return [];
   return [...new Set(a.map(x=>String(x||'').toUpperCase().trim()).filter(x=>/^[A-Z]{2}-[A-Z]{3}$/.test(x)))];
 }
-function htmlConvite({ nome, quem, link, app, modelo }){
+function htmlConvite({ nome, email, link, app, modelo }){
+  const btn = (href, txt, bg, fg) => `<a href="${esc(href)}" style="background:${bg};color:${fg};text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:6px;display:inline-block">${txt}</a>`;
   return `<!doctype html><html><body style="margin:0;background:#F2F4F8;font-family:Arial,Helvetica,sans-serif;color:#14233A">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F2F4F8;padding:24px 0"><tr><td align="center">
   <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border:1px solid #DCE2EA;border-radius:10px">
     <tr><td style="background:#14284B;color:#ffffff;padding:16px 22px;border-radius:10px 10px 0 0;font-size:18px;font-weight:bold">JetFor · Controle de Manutenção</td></tr>
     <tr><td style="padding:22px;font-size:15px;line-height:1.55">
       <p style="margin:0 0 12px">Olá${nome?', '+esc(nome):''}!</p>
-      <p style="margin:0 0 12px"><b>${esc(quem)}</b> convidou você para usar o <b>JetFor</b>, o sistema de controle de manutenção da frota, com o acesso <b>${esc(modelo)}</b>.</p>
-      <p style="margin:0 0 18px">Para começar, crie a sua senha:</p>
-      <p style="margin:0 0 18px"><a href="${esc(link)}" style="background:#C79A3B;color:#14233A;text-decoration:none;font-weight:bold;padding:12px 20px;border-radius:6px;display:inline-block">Criar minha senha</a></p>
-      <p style="margin:0 0 12px;font-size:13px;color:#5D6A7D">Depois, entre em <a href="${esc(app)}" style="color:#1B3456">${esc(app.replace(/^https?:\/\//,''))}</a> com este e-mail e a senha que você criou.</p>
-      <p style="margin:0;font-size:13px;color:#5D6A7D">O link vale por pouco tempo. Se expirar, abra o JetFor, clique em <b>Esqueci minha senha</b> e use este mesmo e-mail.</p>
+      <p style="margin:0 0 18px">Você recebeu acesso ao <b>JetFor</b>, o sistema de controle de manutenção da frota da <b>Jet For Aviation</b>, com o perfil <b>${esc(modelo)}</b>.</p>
+      <p style="margin:0 0 10px"><b>1.</b> Crie a sua senha:</p>
+      <p style="margin:0 0 20px">${btn(link,'Criar minha senha','#C79A3B','#14233A')}</p>
+      <p style="margin:0 0 10px"><b>2.</b> Depois, entre com o e-mail <b>${esc(email)}</b> e a senha que você criou:</p>
+      <p style="margin:0 0 20px">${btn(app,'Entrar no JetFor','#1B3456','#ffffff')}</p>
+      <p style="margin:0;font-size:13px;color:#5D6A7D">O link de criar senha vale por 1 hora. Se expirar, clique em <b>Entrar no JetFor</b>, depois em <b>Esqueci minha senha</b>, e use este mesmo e-mail.</p>
     </td></tr>
-    <tr><td style="padding:12px 22px;border-top:1px solid #DCE2EA;font-size:12px;color:#5D6A7D">Jet For Aviation · Direção de Manutenção. Se você não esperava este convite, ignore este e-mail.</td></tr>
+    <tr><td style="padding:12px 22px;border-top:1px solid #DCE2EA;font-size:12px;color:#5D6A7D">Jet For Aviation · Direção de Manutenção. Mensagem automática, não precisa responder. Se você não esperava este acesso, ignore este e-mail.</td></tr>
   </table></td></tr></table></body></html>`;
 }
 
@@ -108,9 +110,9 @@ module.exports = async (req, res) => {
   try{
     await enviar({
       para: email,
-      assunto: 'Convite para o JetFor · Controle de Manutenção',
-      html: htmlConvite({ nome, quem: me.nome || caller.email || 'A Direção de Manutenção', link, app, modelo: NOME_MODELO[papel] }),
-      texto: `Olá ${nome}! Você foi convidado(a) para o JetFor. Crie sua senha neste link: ${link}\nDepois entre em ${app} com este e-mail. Se o link expirar, use "Esqueci minha senha" no JetFor.`
+      assunto: 'Seu acesso ao JetFor · Controle de Manutenção',
+      html: htmlConvite({ nome, email, link, app, modelo: NOME_MODELO[papel] }),
+      texto: `Olá ${nome}! Você recebeu acesso ao JetFor (Jet For Aviation), perfil ${NOME_MODELO[papel]}.\n1. Crie sua senha: ${link}\n2. Entre em ${app} com o e-mail ${email} e a senha criada.\nO link vale por 1 hora. Se expirar, use "Esqueci minha senha" no JetFor.`
     });
   }catch(e){
     return res.status(502).json({ erro:'A conta foi criada, mas o e-mail não saiu: '+(e.message||e)+'. Confira SMTP_USER e SMTP_PASS (senha de app) no Vercel e use "Reenviar convite".', uid });
