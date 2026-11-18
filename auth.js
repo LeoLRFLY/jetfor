@@ -11,6 +11,8 @@ window.JETFOR_ADMIN_EMAIL = (window.JETFOR_ADMIN_EMAIL || 'leo85filipe@gmail.com
 window.JETFOR_ADMIN_UID = (window.JETFOR_ADMIN_UID || 'l3Cnzaf42DRBK6MIHiXfnHxg2Rk2');
 
 window.CURRENT_USER = null;
+// Escapa texto antes de pôr no HTML (impede que um nome com código rode na tela de outra pessoa)
+function _h(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function isMasterUid(uid){ return uid && uid===window.JETFOR_ADMIN_UID; }
 
 function _authGateEl(){ return document.getElementById('authGate'); }
@@ -80,7 +82,7 @@ function authPendingScreen(email){
   authShowGate(`<div class="authcard">
     ${_brand()}
     <h2>Conta aguardando liberação</h2>
-    <div class="authnote" style="margin-top:6px">A conta <b>${(email||'')}</b> foi criada e está <b>pendente de aprovação</b> por um administrador. Você receberá acesso assim que for liberada.</div>
+    <div class="authnote" style="margin-top:6px">A conta <b>${_h(email)}</b> foi criada e está <b>pendente de aprovação</b> por um administrador. Você receberá acesso assim que for liberada.</div>
     <button class="btn o authbtn" style="margin-top:14px" onclick="authLogout()">Sair</button>
   </div>`);
 }
@@ -171,7 +173,7 @@ function authUpdateHeader(){
   const el=document.getElementById('userChip');
   if(el && window.CURRENT_USER){
     const papel={admin:'Admin',editor:'Editor',leitor:'Leitor'}[window.CURRENT_USER.papel]||window.CURRENT_USER.papel;
-    el.innerHTML=`<span class="uname">${(window.CURRENT_USER.nome||'')}</span><span class="urole">${papel}</span>`;
+    el.innerHTML=`<span class="uname">${_h(window.CURRENT_USER.nome)}</span><span class="urole">${_h(papel)}</span>`;
     el.style.display='';
   }
 }
@@ -194,8 +196,8 @@ function renderUsuarios(){
       const me=(u.uid===window.CURRENT_USER.uid);
       const sel=['admin','editor','leitor'].map(p=>`<option value="${p}"${u.papel===p?' selected':''}>${p==='admin'?'Admin':p==='editor'?'Editor':'Leitor'}</option>`).join('');
       return `<tr>
-        <td>${(u.nome||'')}${me?' <span class="basetag">você</span>':''}</td>
-        <td>${(u.email||'')}</td>
+        <td>${_h(u.nome)}${me?' <span class="basetag">você</span>':''}</td>
+        <td>${_h(u.email)}</td>
         <td><select class="usel" onchange="usuSetPapel('${u.uid}',this.value)"${me?' disabled':''}>${sel}</select></td>
         <td>${u.ativo? '<span class="pill ok">Ativo</span>':'<span class="pill wn">Pendente</span>'}</td>
         <td class="num" style="white-space:nowrap">${usuFmtData(u.ultimoAcesso)}</td>
@@ -273,7 +275,7 @@ function detReload(){
     window._DET_LOGS=logs; window._DET_USERS=users;
     const sel=document.getElementById('detUser');
     if(sel){ const cur=sel.value; const nomes=[...new Set(logs.map(l=>l.nome).filter(Boolean))].sort();
-      sel.innerHTML='<option value="">Todos os usuários</option>'+nomes.map(n=>`<option${n===cur?' selected':''}>${n}</option>`).join(''); }
+      sel.innerHTML='<option value="">Todos os usuários</option>'+nomes.map(n=>`<option${n===cur?' selected':''}>${_h(n)}</option>`).join(''); }
     detDraw();
   }).catch(e=>{ const body=document.getElementById('detBody'); if(body) body.innerHTML='<div class="cfbnote" style="color:#c0392b">Não foi possível carregar: '+((e&&e.message)||e)+'</div>'; });
 }
@@ -353,8 +355,8 @@ function renderLogs(){
     window._LOG_CACHE=rows;
     const users=[...new Set(rows.map(r=>r.nome).filter(Boolean))].sort();
     const acoes=[...new Set(rows.map(r=>r.acao).filter(Boolean))].sort();
-    const uu=document.getElementById('lgUser'); if(uu) uu.innerHTML='<option value="">Usuário: todos</option>'+users.map(u=>`<option>${u}</option>`).join('');
-    const aa=document.getElementById('lgAcao'); if(aa) aa.innerHTML='<option value="">Ação: todas</option>'+acoes.map(a=>`<option>${a}</option>`).join('');
+    const uu=document.getElementById('lgUser'); if(uu) uu.innerHTML='<option value="">Usuário: todos</option>'+users.map(u=>`<option>${_h(u)}</option>`).join('');
+    const aa=document.getElementById('lgAcao'); if(aa) aa.innerHTML='<option value="">Ação: todas</option>'+acoes.map(a=>`<option>${_h(a)}</option>`).join('');
     ['lgUser','lgAcao','lgFrom','lgTo'].forEach(id=>{const e=document.getElementById(id); if(e) e.addEventListener('change',logsDraw);});
     const bq=document.getElementById('lgBusca'); if(bq) bq.addEventListener('input',logsDraw);
     logsDraw();
@@ -379,11 +381,11 @@ function logsDraw(){
   const tb=document.getElementById('lgList'); if(!tb) return;
   tb.innerHTML = filt.length? filt.map(r=>`<tr>
     <td class="num" style="white-space:nowrap">${usuFmtData(r.ts)}</td>
-    <td>${(r.nome||r.email||'')}</td>
-    <td>${({admin:'Admin',editor:'Editor',leitor:'Leitor'})[r.papel]||(r.papel||'')}</td>
-    <td>${(r.acao||'')}</td>
-    <td class="cfbdesc">${(r.detalhe||'')}</td>
-    <td>${(r.ac||'')}</td></tr>`).join('') : '<tr><td colspan="6" style="padding:14px;color:#999">Nenhum registro para estes filtros.</td></tr>';
+    <td>${_h(r.nome||r.email)}</td>
+    <td>${_h(({admin:'Admin',editor:'Editor',leitor:'Leitor'})[r.papel]||r.papel)}</td>
+    <td>${_h(r.acao)}</td>
+    <td class="cfbdesc">${_h(r.detalhe)}</td>
+    <td>${_h(r.ac)}</td></tr>`).join('') : '<tr><td colspan="6" style="padding:14px;color:#999">Nenhum registro para estes filtros.</td></tr>';
   const c=document.getElementById('lgCount'); if(c) c.textContent=filt.length+' de '+rows.length+' registros.';
 }
 

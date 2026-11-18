@@ -7,7 +7,8 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function perfil()  { return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data; }
     function ativo()   { return master() || (signedIn() && perfil().ativo == true); }
-    function admin()   { return master() || (signedIn() && perfil().papel == 'admin'); }
+    // admin precisa estar ATIVO: admin bloqueado perde os poderes (não consegue se desbloquear sozinho)
+    function admin()   { return master() || (signedIn() && perfil().papel == 'admin' && perfil().ativo == true); }
     function editor()  { return master() || (ativo() && (perfil().papel == 'admin' || perfil().papel == 'editor')); }
     function adminEmail(){ return request.auth.token.email == 'leo85filipe@gmail.com'; }
 
