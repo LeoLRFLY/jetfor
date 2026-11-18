@@ -11,7 +11,7 @@ const { initAdmin } = require('./_lib/firebase');
 const { enviar } = require('./_lib/mailer');
 
 const MASTER_UID = 'l3Cnzaf42DRBK6MIHiXfnHxg2Rk2';
-const TELAS = { inicio:'v', mapa:'', freq:'v', docsac:'', geral:'', obrig:'v', sasc:'', oficinas:'', forms:'v' };
+const TELAS = { inicio:'v', mapa:'', freq:'v', docsac:'', geral:'', listafrota:'', obrig:'v', sasc:'', oficinas:'', forms:'v' };
 const MODELOS = ['admin','editor','leitor','mecanico','auditor','personalizado'];
 const NOME_MODELO = { admin:'Admin', editor:'Editor', leitor:'Leitor', mecanico:'Mecânico', auditor:'Auditor externo', personalizado:'Personalizado' };
 
