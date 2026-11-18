@@ -1,5 +1,5 @@
 /* ==========================================================================
-   JetFor · Gestão da Frota (MGM rev 09.01, item 2.9 · modelo do item 8.4.23)  — v72
+   JetFor · Gestão da Frota (MGM rev 09.01, item 2.9 · modelo do item 8.4.23)  — v73
    Lista das aeronaves (tipo, matrícula, S/N e capacidades no formato das EO)
    com controle formal de revisões.
    - As matrículas vêm do cadastro da frota (STATE.frota).

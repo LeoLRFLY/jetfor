@@ -1309,7 +1309,7 @@ function drawFleet(){
   // v71: só as aeronaves liberadas para o usuário (permissões por aeronave)
   const _acOkF=f=>(typeof acVisivel!=='function') || acVisivel(f.mapa||f.mat);
   const todos=fleet.map((f,i)=>{ const s=(f.mapa&&STATE.acmaps[f.mapa])?fleetStatus(f.mapa):null; return {f,i,s,sev:f.fora?'fora':_sev(s)}; }).filter(r=>_acOkF(r.f));
-  // v72: aeronave retirada na Gestão da Frota (MGM 2.9) continua com card, mas fora das contas
+  // v73: aeronave retirada na Gestão da Frota (MGM 2.9) continua com card, mas fora das contas
   const rows=todos.filter(r=>!r.f.fora), foraRows=todos.filter(r=>r.f.fora);
   const comMapa=rows.filter(r=>r.s);
   const totOd=comMapa.reduce((a,r)=>a+r.s.od,0), totWn=comMapa.reduce((a,r)=>a+r.s.wn,0);
