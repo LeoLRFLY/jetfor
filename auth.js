@@ -197,6 +197,7 @@ function renderUsuarios(){
   }
   el.innerHTML=`<h2 style="color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:6px">👥 Usuários</h2>
     <div class="cfbnote">Libere ou bloqueie o acesso e defina as permissões de cada pessoa em <b>⚙ Permissões</b>: por tela (ver, criar, editar, excluir) e por aeronave. <b>Admin</b> tem tudo. Só o administrador-mestre cria ou mexe em outro Admin.</div>
+    <div style="margin:10px 0"><button class="btn p" type="button" onclick="usuConvidar()">✉ Convidar pessoa</button></div>
     <div class="tblwrap"><table class="cfbtable"><thead><tr><th>Nome</th><th>E-mail</th><th>Permissão</th><th>Aeronaves</th><th>E-mail de vencimentos</th><th>Status</th><th>Último acesso</th><th>Ações</th></tr></thead><tbody id="usuList"><tr><td colspan="8" style="padding:14px;color:#999">Carregando…</td></tr></tbody></table></div>`;
   DB.collection('usuarios').get().then(qs=>{
     const rows=[]; qs.forEach(d=>rows.push(Object.assign({uid:d.id},d.data())));
@@ -206,6 +207,7 @@ function renderUsuarios(){
     const pillSt={ativo:'<span class="pill ok">Ativo</span>',pendente:'<span class="pill wn">Pendente</span>',bloqueado:'<span class="pill od">Bloqueado</span>'};
     tb.innerHTML = rows.length? rows.map(u=>{
       const me=(u.uid===window.CURRENT_USER.uid), mexe=_usuPodeMexer(u)&&!me, st=_usuStatus(u);
+      const convidado=(u.convidadoEm && !u.ultimoAcesso && u.ativo);
       const modelo=isMasterUid(u.uid)?'Admin (mestre)':permModeloNome(u.papel||'leitor');
       return `<tr>
         <td>${_h(u.nome)}${me?' <span class="basetag">você</span>':''}</td>
@@ -213,13 +215,14 @@ function renderUsuarios(){
         <td>${_h(modelo)}</td>
         <td>${_usuAcsTxt(u)}</td>
         <td>${u.notifEmail===false?'<span style="color:#aab">Não recebe</span>':'Recebe'}</td>
-        <td>${pillSt[st]}</td>
+        <td>${convidado?'<span class="pill wn" title="Convite enviado, ainda não entrou">Convidado</span>':pillSt[st]}</td>
         <td class="num" style="white-space:nowrap">${usuFmtData(u.ultimoAcesso)}</td>
         <td class="usuacts">
           <button class="btn o sm" title="Permissões" onclick="usuAbrirPerm('${_h(u.uid)}')">⚙ Permissões</button>
           ${mexe?(u.ativo
             ? `<button class="btn o sm" onclick="usuSetAtivo('${_h(u.uid)}',false)">Bloquear</button>`
             : `<button class="btn g sm" onclick="usuSetAtivo('${_h(u.uid)}',true)">Liberar</button>`):''}
+          ${(mexe && u.convidadoEm && !u.ultimoAcesso)?`<button class="btn o sm" title="Reenviar convite por e-mail" onclick="usuReenviarConvite('${_h(u.uid)}')">✉ Reenviar</button>`:''}
           ${(mexe||me)?`<button class="btn o sm" title="Editar nome" onclick="usuEditarNome('${_h(u.uid)}')">✎</button>`:''}
           <button class="btn o sm" title="Enviar redefinição de senha" onclick="usuResetSenha('${_h(u.uid)}')">🔑</button>
           ${mexe?`<button class="btn o sm" title="Remover" onclick="usuRemover('${_h(u.uid)}')">🗑</button>`:''}
@@ -246,6 +249,9 @@ function usuAbrirPerm(uid){
   const modelo=_usuEhAdmin(u)?'admin':((PERM_MODELOS[u.papel]||u.papel==='personalizado')?u.papel:'leitor');
   USUPERM={ uid:uid, modelo:modelo, p:JSON.parse(JSON.stringify(ef.p)), acs:(ef.acs==='todas'?'todas':ef.acs.slice()),
     st:_usuStatus(u), notif:u.notifEmail!==false, trava:!_usuPodeMexer(u) || uid===window.CURRENT_USER.uid, nome:u.nome||u.email||'' };
+  _usuOverlay();
+}
+function _usuOverlay(){
   let ov=document.getElementById('permOverlay');
   if(!ov){ ov=document.createElement('div'); ov.className='overlay'; ov.id='permOverlay';
     ov.innerHTML=`<div class="modal" style="width:820px;max-width:100%"><h3 id="permTitle">Permissões</h3><div class="mbody" style="display:block" id="permBody"></div>
@@ -254,11 +260,54 @@ function usuAbrirPerm(uid){
     document.body.appendChild(ov); }
   _usuDrawPerm(); ov.classList.add('show');
 }
+// ---------- convite por e-mail ----------
+function usuConvidar(){
+  USUPERM={ uid:null, convite:true, modelo:'leitor', p:PERM_MODELOS.leitor.p(), acs:'todas', st:'ativo', notif:true, trava:false, nome:'', email:'' };
+  _usuOverlay();
+  setTimeout(()=>{ const e=document.getElementById('pmNome'); if(e) e.focus(); },50);
+}
+function _usuPermLimpa(S){
+  const perm={}; PERM_TELAS.forEach(t=>{ if(t.adm) return; perm[t.k]={v:!!S.p[t.k].v,c:!t.so&&!!S.p[t.k].c,e:!t.so&&!!S.p[t.k].e,x:!t.so&&!!S.p[t.k].x}; });
+  return perm;
+}
+async function _usuChamarConvite(dados){
+  const tok=await AUTH.currentUser.getIdToken();
+  let r, j={};
+  try{ r=await fetch('/api/convidar',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+tok},body:JSON.stringify(dados)}); }
+  catch(e){ throw new Error('Sem conexão com o servidor do JetFor.'); }
+  try{ j=await r.json(); }catch(e){}
+  if(r.status===404) throw new Error('O envio de convites ainda não está publicado nesta versão do site.');
+  if(!r.ok) throw new Error(j.erro||('Erro '+r.status));
+  return j;
+}
+async function usuEnviarConvite(){
+  const S=USUPERM; if(!S) return;
+  S.nome=(document.getElementById('pmNome').value||'').trim();
+  S.email=(document.getElementById('pmEmail').value||'').trim().toLowerCase();
+  if(!S.nome){ toast('Informe o nome da pessoa'); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(S.email)){ toast('Informe um e-mail válido'); return; }
+  if(S.modelo!=='admin' && S.acs!=='todas' && !S.acs.length && !window.confirm('Nenhuma aeronave marcada: '+S.nome+' não verá nenhum mapa. Enviar assim?')) return;
+  const btn=document.getElementById('permOk'); btn.disabled=true; btn.textContent='Enviando…';
+  try{
+    const j=await _usuChamarConvite({ email:S.email, nome:S.nome, papel:S.modelo, perm:_usuPermLimpa(S), acs:(S.modelo==='admin'?'todas':S.acs), notifEmail:S.notif });
+    toast(j.reenvio?'✔ Convite reenviado para '+S.email:'✔ Convite enviado para '+S.email);
+    usuFecharPerm(); renderUsuarios();
+  }catch(e){ toast('⚠ '+(e.message||e)); }
+  finally{ btn.disabled=false; btn.textContent='Enviar convite'; }
+}
+async function usuReenviarConvite(uid){
+  const u=(window._USU_CACHE||{})[uid]; if(!u) return;
+  if(!window.confirm('Reenviar o convite para '+(u.email||'')+'?')) return;
+  try{
+    await _usuChamarConvite({ email:u.email, nome:u.nome||u.email, papel:u.papel||'leitor', perm:u.perm||{}, acs:(u.acs||'todas'), notifEmail:u.notifEmail!==false });
+    toast('✔ Convite reenviado para '+u.email); renderUsuarios();
+  }catch(e){ toast('⚠ '+(e.message||e)); }
+}
 function usuFecharPerm(){ const ov=document.getElementById('permOverlay'); if(ov) ov.classList.remove('show'); USUPERM=null; }
 function _usuDrawPerm(){
   const S=USUPERM; if(!S) return; const tr=S.trava, adm=S.modelo==='admin';
   const meMaster=isMasterUid(window.CURRENT_USER.uid);
-  document.getElementById('permTitle').textContent='Permissões · '+S.nome;
+  document.getElementById('permTitle').textContent=S.convite?'Convidar pessoa':'Permissões · '+S.nome;
   const opts=Object.keys(PERM_MODELOS).filter(k=>k!=='admin'||meMaster||adm).map(k=>`<option value="${k}"${S.modelo===k?' selected':''}>${_h(PERM_MODELOS[k].n)}</option>`).join('')
     +`<option value="personalizado"${S.modelo==='personalizado'?' selected':''}>Personalizado</option>`;
   const dis=tr?' disabled':'';
@@ -270,9 +319,12 @@ function _usuDrawPerm(){
       return `<td><input type="checkbox" data-t="${t.k}" data-o="${o}"${on?' checked':''}${(fixo||tr)?' disabled':''} aria-label="${_h(t.n)}: ${({v:'ver',c:'criar',e:'editar',x:'excluir'})[o]}"></td>`; }).join('')}</tr>`; };
   const todas=adm||S.acs==='todas', mats=_usuMats();
   document.getElementById('permBody').innerHTML=`
+    ${S.convite?`<div style="display:flex;flex-wrap:wrap;gap:12px 18px;margin-bottom:12px">
+      <div class="fld" style="flex:1 1 220px"><label for="pmNome">Nome</label><input id="pmNome" value="${_h(S.nome)}" placeholder="Nome completo"></div>
+      <div class="fld" style="flex:1 1 260px"><label for="pmEmail">E-mail</label><input id="pmEmail" type="email" value="${_h(S.email)}" placeholder="pessoa@empresa.com"></div></div>`:''}
     <div style="display:flex;flex-wrap:wrap;gap:12px 18px;align-items:flex-end;margin-bottom:12px">
       <div class="fld"><label>Modelo de permissão</label><select id="pmModelo"${dis}>${opts}</select></div>
-      <div class="fld"><label>Situação</label><select id="pmSt"${dis}><option value="ativo"${S.st==='ativo'?' selected':''}>Ativo</option><option value="pendente"${S.st==='pendente'?' selected':''}>Pendente</option><option value="bloqueado"${S.st==='bloqueado'?' selected':''}>Bloqueado</option></select></div>
+      <div class="fld"${S.convite?' style="display:none"':''}><label>Situação</label><select id="pmSt"${dis}><option value="ativo"${S.st==='ativo'?' selected':''}>Ativo</option><option value="pendente"${S.st==='pendente'?' selected':''}>Pendente</option><option value="bloqueado"${S.st==='bloqueado'?' selected':''}>Bloqueado</option></select></div>
       <label style="display:flex;gap:6px;align-items:center;font-size:12.5px"><input type="checkbox" id="pmNotif"${S.notif?' checked':''}${(tr&&S.uid!==window.CURRENT_USER.uid)?' disabled':''}> Recebe e-mail de vencimentos</label>
     </div>
     <div class="tblwrap"><table class="cfbtable" style="text-align:center"><thead><tr><th style="text-align:left">Tela</th><th>Ver</th><th>Criar</th><th>Editar</th><th>Excluir</th></tr></thead><tbody>${PERM_TELAS.map(linha).join('')}</tbody></table></div>
@@ -281,7 +333,10 @@ function _usuDrawPerm(){
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${mats.map(m=>`<label class="basetag" style="font-size:12px;padding:4px 10px;display:flex;gap:5px;align-items:center"><input type="checkbox" class="pmAc" value="${_h(m)}"${(todas||(S.acs!=='todas'&&S.acs.indexOf(m)>=0))?' checked':''}${(tr||todas)?' disabled':''}> ${_h(m)}</label>`).join('')||'<span class="hint">Nenhuma aeronave cadastrada.</span>'}</div>
     </div>
     <div class="cfbnote" style="margin-top:12px" id="pmResumo"></div>`;
-  document.getElementById('permNota').textContent = tr ? (isMasterUid(S.uid)?'Administrador-mestre: acesso total, não pode ser alterado.':(S.uid===window.CURRENT_USER.uid?'Você não altera as próprias permissões (só o e-mail de vencimentos).':'Só o administrador-mestre altera outro Admin.')) : 'Criar, editar e excluir separados valem na tela. O banco garante a aeronave e se a pessoa pode alterar cada tela.';
+  // guarda o que já foi digitado no convite antes de redesenhar
+  ['pmNome','pmEmail'].forEach(id=>{ const e=document.getElementById(id); if(e) e.oninput=()=>{ S[id==='pmNome'?'nome':'email']=e.value; }; });
+  document.getElementById('permOk').textContent = S.convite ? 'Enviar convite' : 'Salvar permissões';
+  document.getElementById('permNota').textContent = S.convite ? 'A pessoa recebe um e-mail de contato@lrfly.com.br para criar a senha e já entra liberada com estas permissões.' : tr ? (isMasterUid(S.uid)?'Administrador-mestre: acesso total, não pode ser alterado.':(S.uid===window.CURRENT_USER.uid?'Você não altera as próprias permissões (só o e-mail de vencimentos).':'Só o administrador-mestre altera outro Admin.')) : 'Criar, editar e excluir separados valem na tela. O banco garante a aeronave e se a pessoa pode alterar cada tela.';
   document.getElementById('permOk').style.display = (tr && S.uid!==window.CURRENT_USER.uid) ? 'none' : '';
   const body=document.getElementById('permBody');
   const pm=document.getElementById('pmModelo'); if(pm) pm.onchange=()=>{ const k=pm.value; S.modelo=k; if(PERM_MODELOS[k]) S.p=PERM_MODELOS[k].p(); if(k==='admin') S.acs='todas'; _usuDrawPerm(); };
@@ -305,9 +360,10 @@ function _usuResumo(){
   const ve=telas.filter(t=>S.p[t.k].v).length;
   const alt=telas.filter(t=>{ const c=S.p[t.k]; return c.c||c.e||c.x; }).map(t=>t.n);
   const acs=S.acs==='todas'?'todas as aeronaves':(S.acs.length?S.acs.map(_h).join(', '):'<b style="color:var(--od)">nenhuma aeronave</b>');
-  el.innerHTML=`<b>${_h(S.nome)}</b> vê ${ve} de ${telas.length} telas, em ${acs}. `+(alt.length?'Pode alterar: '+alt.map(_h).join(', ')+'.':'Não altera nada (só leitura).')+(S.st!=='ativo'?` <b style="color:var(--warn)">Situação: ${S.st}, sem acesso por enquanto.</b>`:'');
+  el.innerHTML=`<b>${_h(S.nome||'A pessoa')}</b> vê ${ve} de ${telas.length} telas, em ${acs}. `+(alt.length?'Pode alterar: '+alt.map(_h).join(', ')+'.':'Não altera nada (só leitura).')+(S.st!=='ativo'?` <b style="color:var(--warn)">Situação: ${S.st}, sem acesso por enquanto.</b>`:'');
 }
 function usuSalvarPerm(){
+  if(USUPERM && USUPERM.convite) return usuEnviarConvite();
   const S=USUPERM; if(!S) return; const ref=DB.collection('usuarios').doc(S.uid);
   // a própria pessoa só muda o e-mail de vencimentos
   if(S.trava){

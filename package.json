@@ -1,0 +1,9 @@
+{
+  "name": "jetfor",
+  "private": true,
+  "description": "JetFor Controle de Manutenção — site estático + funções de e-mail (api/)",
+  "dependencies": {
+    "firebase-admin": "12.7.0",
+    "nodemailer": "6.10.1"
+  }
+}
