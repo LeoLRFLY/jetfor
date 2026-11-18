@@ -1125,7 +1125,7 @@ function renderObrig(){
   const yn = v => v==='SIM' ? '<span class="badge2 sim">SIM</span>' : v==='NÃO' ? '<span class="badge2 nao">NÃO</span>' : esc(v);
   const mk = v => (v==='✓') ? '<td class="c yes">✓</td>' : '<td class="c no">–</td>';
   // frota REAL (nunca mais desatualiza): usa STATE.frota / JETFOR_DASH.fleet
-  const fleet=(STATE&&STATE.frota&&STATE.frota.length)?STATE.frota:((window.JETFOR_DASH&&window.JETFOR_DASH.fleet)||[]);
+  const fleet=((STATE&&STATE.frota&&STATE.frota.length)?STATE.frota:((window.JETFOR_DASH&&window.JETFOR_DASH.fleet)||[])).filter(f=>!f.fora);
   const enqShort = e => (e||'').replace('135.411','')||'—';
   const sascMats = fleet.filter(f=>f.sasc).map(f=>f.mat).join(', ')||'—';
 
@@ -1308,7 +1308,9 @@ function drawFleet(){
   fleet.forEach(f=>{ if(!f.mapa){ const k=matchAcmapKey(f); if(k) f.mapa=k; } });
   // v71: só as aeronaves liberadas para o usuário (permissões por aeronave)
   const _acOkF=f=>(typeof acVisivel!=='function') || acVisivel(f.mapa||f.mat);
-  const rows=fleet.map((f,i)=>{ const s=(f.mapa&&STATE.acmaps[f.mapa])?fleetStatus(f.mapa):null; return {f,i,s,sev:_sev(s)}; }).filter(r=>_acOkF(r.f));
+  const todos=fleet.map((f,i)=>{ const s=(f.mapa&&STATE.acmaps[f.mapa])?fleetStatus(f.mapa):null; return {f,i,s,sev:f.fora?'fora':_sev(s)}; }).filter(r=>_acOkF(r.f));
+  // v72: aeronave retirada na Gestão da Frota (MGM 2.9) continua com card, mas fora das contas
+  const rows=todos.filter(r=>!r.f.fora), foraRows=todos.filter(r=>r.f.fora);
   const comMapa=rows.filter(r=>r.s);
   const totOd=comMapa.reduce((a,r)=>a+r.s.od,0), totWn=comMapa.reduce((a,r)=>a+r.s.wn,0);
   const emDia=comMapa.filter(r=>r.sev==='ok').length;
@@ -1336,15 +1338,15 @@ function drawFleet(){
   // filtros
   const nAtt=rows.filter(r=>r.sev==='od'||r.sev==='wn').length;
   const F=el.dataset.filtro||'all';
-  $('#hmFilters').innerHTML=[['all',`Todas (${rows.length})`],['att',`Precisam de atenção (${nAtt})`],['sasc',`SASC (${nS})`]]
+  $('#hmFilters').innerHTML=[['all',`Todas (${rows.length})`],['att',`Precisam de atenção (${nAtt})`],['sasc',`SASC (${nS})`]].concat(foraRows.length?[['fora',`Fora da frota (${foraRows.length})`]]:[])
     .map(x=>`<button class="hm-chip" type="button" data-f="${x[0]}" aria-pressed="${F===x[0]}">${x[1]}</button>`).join('');
   $('#hmFilters').querySelectorAll('[data-f]').forEach(b=>b.addEventListener('click',()=>{ el.dataset.filtro=b.dataset.f; drawFleet(); }));
   // cards (problemas primeiro)
   const sorted=[...rows].sort((a,b)=>_SEVRANK[a.sev]-_SEVRANK[b.sev] || (a.s&&b.s? (b.s.od-a.s.od) || (b.s.wn-a.s.wn) || ((a.s.prox&&b.s.prox)? a.s.prox.u.r-b.s.prox.u.r:0) : 0));
-  const vis=sorted.filter(r=> F==='att'?(r.sev==='od'||r.sev==='wn') : F==='sasc'? !!r.f.sasc : true);
+  const vis= F==='fora' ? foraRows : sorted.filter(r=> F==='att'?(r.sev==='od'||r.sev==='wn') : F==='sasc'? !!r.f.sasc : true).concat(F==='all'?foraRows:[]);
   const card=r=>{
     const f=r.f, s=r.s, i=r.i;
-    const st = r.sev==='na' ? `<span class="hm-st na">${f.mapa?'Sem tarefas':'Sem mapa'}</span>`
+    const st = r.sev==='fora' ? '<span class="hm-st na">Fora da frota</span>' : r.sev==='na' ? `<span class="hm-st na">${f.mapa?'Sem tarefas':'Sem mapa'}</span>`
       : r.sev==='od' ? `<span class="hm-st od">${s.od} vencida${s.od>1?'s':''}</span>`
       : r.sev==='wn' ? `<span class="hm-st wn">${s.wn} próxima${s.wn>1?'s':''}</span>`
       : '<span class="hm-st ok">Em dia</span>';
@@ -1355,11 +1357,12 @@ function drawFleet(){
       ${s.prox?`<div class="hm-next"><div><div class="lbl">Próximo vencimento</div><div class="what">${esc(s.prox.t.nome||'')}</div></div><div class="val ${s.prox.st}">${_fmtDisp(s.prox.u)}</div></div>`:''}
       <div class="hm-open">Abrir mapa de manutenção →</div>`
       : `<div class="hm-nomap">${f.mapa?'Mapa sem tarefas cadastradas.':'Mapa ainda não cadastrado. Cadastre para acompanhar os vencimentos desta aeronave.'}</div>`;
-    return `<article class="hm-ac ${s?'clik':''}" tabindex="0" data-i="${i}" data-sev="${r.sev}" aria-label="${esc(f.mat)}, ${esc(f.modelo)}">
+    const foraTxt = f.fora ? `<div class="hm-nomap hm-foratxt">Aeronave fora da frota${f.fora.data?' desde '+esc(fmtDate(new Date(f.fora.data+'T00:00:00'))):''}${f.fora.rev?' (Gestão da Frota, rev. '+esc(f.fora.rev)+')':''}. O mapa e o histórico continuam guardados.</div>` : '';
+    return `<article class="hm-ac ${s?'clik':''}${f.fora?' hm-fora':''}" tabindex="0" data-i="${i}" data-sev="${r.sev}" aria-label="${esc(f.mat)}, ${esc(f.modelo)}${f.fora?', fora da frota':''}">
       <div class="hd"><div><div class="mat">${esc(f.mat)}</div><div class="model">${esc(f.modelo)}</div></div>
         <div class="hdr-right">${st}<button class="hm-kebab no-print" type="button" aria-label="Opções da ${esc(f.mat)}" aria-haspopup="menu">⋯</button>
           <div class="hm-menu" role="menu" hidden><button type="button" role="menuitem" data-edit="${i}">✎ Editar aeronave</button><button type="button" role="menuitem" class="danger" data-del="${i}">🗑 Remover aeronave</button></div></div></div>
-      <div class="hm-tags"><span class="hm-tag ${f.sasc?'sasc':''}">${f.sasc?'SASC':'Não-SASC'}</span><span class="hm-tag mono">RBAC ${esc(f.enq)}</span></div>
+      ${foraTxt}<div class="hm-tags"><span class="hm-tag ${f.sasc?'sasc':''}">${f.sasc?'SASC':'Não-SASC'}</span><span class="hm-tag mono">RBAC ${esc(f.enq)}</span></div>
       ${body}
       <details class="hm-det"><summary>Detalhes técnicos</summary><dl><dt>TCDS</dt><dd>${esc(f.tcds)}</dd><dt>Assentos (excl. piloto)</dt><dd>${esc(f.assentos)}</dd><dt>Observação</dt><dd>${esc(f.obs)}</dd></dl></details>
     </article>`;
@@ -1740,7 +1743,7 @@ const SASC_ITEMS=[
       <div class="sasccard" onclick="switchView('oficinas')"><div class="si">🔍</div><div><b>Auditorias SASC</b><div class="sd">F-SASC-02 · oficinas e fornecedores.</div></div></div>
       <div class="sasccard" onclick="sascShow('iio')"><div class="si">✅</div><div><b>IIO</b><div class="sd">Itens de Inspeção Obrigatória.</div></div></div>
     </div>
-    <div class="cfbnote" style="background:#f7f9fc;border-left-color:var(--gold)">A frota SASC hoje: <b>${((STATE&&STATE.frota)||[]).filter(f=>f.sasc).map(f=>esc(f.mat+(f.modelo?' ('+f.modelo+')':''))).join(', ')||'—'}</b>. Veja a matriz completa na aba <a href="#" onclick="switchView('obrig');return false">Obrigações MGM (SASC / PMAC)</a>.</div>`},
+    <div class="cfbnote" style="background:#f7f9fc;border-left-color:var(--gold)">A frota SASC hoje: <b>${((STATE&&STATE.frota)||[]).filter(f=>f.sasc&&!f.fora).map(f=>esc(f.mat+(f.modelo?' ('+f.modelo+')':''))).join(', ')||'—'}</b>. Veja a matriz completa na aba <a href="#" onclick="switchView('obrig');return false">Obrigações MGM (SASC / PMAC)</a>.</div>`},
   {key:'confiab', label:'📊 Confiabilidade', launch:()=>openConfiab('sasc')},
   {key:'comite', label:'🗓 Comitê SASC & Atas', html:()=>`
     <div class="cfbcardt">Comitê SASC & Atas (F-SASC-01)</div>
@@ -2084,6 +2087,7 @@ function switchView(v){
   $('#view-forms').style.display = v==='forms'?'':'none';
   $('#view-geral').style.display = v==='geral'?'':'none';
   $('#view-oficinas').style.display = v==='oficinas'?'':'none';
+  { const vf=$('#view-listafrota'); if(vf) vf.style.display = v==='listafrota'?'':'none'; }
   { const vu=$('#view-usuarios'); if(vu) vu.style.display = v==='usuarios'?'':'none'; }
   { const vl=$('#view-logs'); if(vl) vl.style.display = v==='logs'?'':'none'; }
   { const vd=$('#view-detetive'); if(vd) vd.style.display = v==='detetive'?'':'none'; }
@@ -2097,11 +2101,12 @@ function switchView(v){
   if(v==='forms') renderForms();
   if(v==='geral') renderDocsGeral();
   if(v==='oficinas') renderOficinas();
+  if(v==='listafrota' && typeof renderListaFrota==='function') renderListaFrota();
   // subtítulo do cabeçalho: aeronave só no Mapa; nas demais abas, o nome da seção
   { const ac=$('#acinfo');
     if(ac){
       if(v==='mapa'){ const a=(cur().aeronave)||{}; const label=`${a.matricula||STATE.currentAC} · ${a.modelo||''}${a.sn?' · S/N '+a.sn:''}`; ac.textContent=label+(a.ano?' · '+a.ano:''); }
-      else { const sec={inicio:'Frota',freq:'Atividades & Frequências',obrig:'Obrigações de manutenção',sasc:'SASC',forms:'Formulários',geral:'Documentos',oficinas:'Oficinas & Auditorias',usuarios:'Usuários',logs:'Registro de atividades',detetive:'Detetive JetFor'}; ac.textContent=sec[v]||''; }
+      else { const sec={inicio:'Frota',freq:'Atividades & Frequências',obrig:'Obrigações de manutenção',sasc:'SASC',forms:'Formulários',geral:'Documentos',oficinas:'Oficinas & Auditorias',listafrota:'Gestão da Frota (MGM 2.9)',usuarios:'Usuários',logs:'Registro de atividades',detetive:'Detetive JetFor'}; ac.textContent=sec[v]||''; }
     }
   }
   window.scrollTo(0,0);
