@@ -9,34 +9,78 @@ service cloud.firestore {
     function ativo()   { return master() || (signedIn() && perfil().ativo == true); }
     // admin precisa estar ATIVO: admin bloqueado perde os poderes (não consegue se desbloquear sozinho)
     function admin()   { return master() || (signedIn() && perfil().papel == 'admin' && perfil().ativo == true); }
-    function editor()  { return master() || (ativo() && (perfil().papel == 'admin' || perfil().papel == 'editor')); }
     function adminEmail(){ return request.auth.token.email == 'leo85filipe@gmail.com'; }
+
+    // ---- v71: permissões por tela e por aeronave ----
+    // perfil.perm = { mapa:{v,c,e,x}, docsac:{...}, geral:{...}, sasc:{...}, oficinas:{...}, ... }
+    // perfil.acs  = 'todas' ou ['PT-LJQ', ...]
+    // Quem ainda não tem 'perm' segue o papel antigo: editor altera tudo, leitor só vê.
+    function op(t, o)   { return perfil().get('perm', {}).get(t, {}).get(o, false) == true; }
+    function alt(t)     { return admin() || (ativo() && ( ('perm' in perfil())
+                                ? (op(t,'c') || op(t,'e') || op(t,'x'))
+                                : perfil().papel == 'editor' )); }
+    function todasAc()  { return admin() || perfil().get('acs', 'todas') == 'todas'; }
+    function acOk(ac)   { return admin() || (ativo() && (todasAc() || ac in perfil().get('acs', []))); }
+
+    // campos de cada tela dentro dos documentos
+    function camposMapa()  { return ['aeronave','contadores','tarefas','da','osHistorico','grupos','baixas']; }
+    function camposDocs()  { return ['docs','docCatsExtra']; }
+    function mudou()       { return request.resource.data.diff(resource.data).affectedKeys(); }
 
     // ---- Perfis de usuário ----
     match /usuarios/{uid} {
       // cada um lê o próprio perfil; admin lê todos
       allow read:   if signedIn() && (request.auth.uid == uid || admin());
-      // ao se cadastrar, a pessoa cria SÓ o próprio doc, como 'leitor' e PENDENTE
+      // ao se cadastrar, a pessoa cria SÓ o próprio doc, como 'leitor' e PENDENTE, sem permissões extras
       // (exceção: o e-mail do administrador e o UID-mestre entram já aprovados)
       allow create: if signedIn() && request.auth.uid == uid
                     && ( adminEmail() || master()
                          || (request.resource.data.papel == 'leitor'
-                             && request.resource.data.ativo == false) );
-      // admin altera papel / libera / bloqueia / edita qualquer campo
-      // o próprio usuário pode atualizar SÓ campos não sensíveis (ex.: último acesso, nome):
-      // papel, ativo e email PRECISAM permanecer iguais → evita auto-promoção.
-      allow update: if admin()
+                             && request.resource.data.ativo == false
+                             && !('perm' in request.resource.data)
+                             && !('acs' in request.resource.data)) );
+      // admin altera papel / permissões / libera / bloqueia. Só o MESTRE mexe em quem é
+      // ou vai virar admin. O próprio usuário altera SÓ campos não sensíveis
+      // (último acesso, nome, e-mail de vencimentos): papel, ativo, email, perm e acs ficam iguais.
+      allow update: if ( admin()
+                         && ( master() || (resource.data.papel != 'admin' && request.resource.data.papel != 'admin') ) )
                     || ( request.auth.uid == uid
                          && request.resource.data.papel == resource.data.papel
                          && request.resource.data.ativo == resource.data.ativo
-                         && request.resource.data.email == resource.data.email );
-      allow delete: if admin();
+                         && request.resource.data.email == resource.data.email
+                         && request.resource.data.get('perm', null) == resource.data.get('perm', null)
+                         && request.resource.data.get('acs', null) == resource.data.get('acs', null) );
+      allow delete: if admin() && ( master() || resource.data.papel != 'admin' );
     }
 
-    // ---- Dados do app (frota, mapas, contadores, docs, confiabilidade…) ----
+    // ---- Dados do app ----
     match /mapas/{doc} {
-      allow read:  if ativo();
-      allow write: if editor();
+
+      // Dados gerais (frota, documentos da empresa, SASC) e oficinas: lê quem está ativo
+      // Cada aeronave: lê só quem tem a aeronave liberada
+      allow read: if (doc in ['_geral','_oficinas']) ? ativo() : acOk(doc);
+
+      // _geral: cada campo exige a permissão da tela dele
+      allow create: if doc == '_geral' && (admin() || alt('mapa'));
+      allow update: if doc == '_geral' && ativo()
+                    && mudou().difference(['updatedAt','frota','hoje','osProx','docsGeral','docCatsGeral','confiab','confiabCfg','rsiEnvios'].toSet()).size() == 0
+                    && (!mudou().hasAny(['frota'])                         || (alt('mapa') && todasAc()))
+                    && (!mudou().hasAny(['hoje','osProx'])                 || alt('mapa'))
+                    && (!mudou().hasAny(['docsGeral','docCatsGeral'])      || alt('geral'))
+                    && (!mudou().hasAny(['confiab','confiabCfg','rsiEnvios']) || alt('sasc'));
+      // campo novo que ainda não está na lista acima: só admin
+      allow update: if doc == '_geral' && admin();
+
+      // _oficinas: Oficinas & Auditorias
+      allow create, update: if doc == '_oficinas' && alt('oficinas');
+
+      // Aeronave: precisa da aeronave liberada e da permissão da tela de cada campo alterado
+      allow create: if !(doc in ['_geral','_oficinas']) && acOk(doc) && alt('mapa');
+      allow update: if !(doc in ['_geral','_oficinas']) && acOk(doc)
+                    && (!mudou().hasAny(camposDocs()) || alt('docsac'))
+                    && (mudou().difference(camposDocs().toSet().union(['updatedAt'].toSet())).size() == 0 || alt('mapa'));
+
+      allow delete: if admin();
     }
 
     // ---- Registro de atividades (auditoria) ----

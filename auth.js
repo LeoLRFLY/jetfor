@@ -131,7 +131,7 @@ function authInit(){
   if(!AUTH) return;
   authLoginForm(); // mostra o login enquanto verifica o estado
   AUTH.onAuthStateChanged(function(user){
-    if(!user){ window.CURRENT_USER=null; document.body.classList.remove('isadmin','authed','ismaster'); authLoginForm(); return; }
+    if(!user){ window.CURRENT_USER=null; document.body.classList.remove('isadmin','authed','ismaster'); if(typeof permAplicarTela==='function') permAplicarTela(); authLoginForm(); return; }
     // busca/gera o perfil do usuário
     const master=isMasterUid(user.uid);
     const ref=DB.collection('usuarios').doc(user.uid);
@@ -153,11 +153,14 @@ function authInit(){
       if(!perfil){ return; }
       if(perfil.ativo===false && !master){ window.CURRENT_USER=null; document.body.classList.remove('isadmin','authed','ismaster'); authPendingScreen(user.email); return; }
       // liberado
-      window.CURRENT_USER={ uid:user.uid, email:(user.email||'').toLowerCase(), nome:perfil.nome||user.email, papel:perfil.papel||'leitor' };
+      window.CURRENT_USER={ uid:user.uid, email:(user.email||'').toLowerCase(), nome:perfil.nome||user.email, papel:perfil.papel||'leitor', perm:perfil.perm||null, acs:perfil.acs||'todas' };
+      // v71: permissões por tela e por aeronave
+      try{ window.CURRENT_USER.permEf=permDoPerfil(perfil, master); }catch(e){}
       document.body.classList.add('authed');
       document.body.classList.toggle('isadmin', perfil.papel==='admin');
       document.body.classList.toggle('ismaster', master);
       authUpdateHeader();
+      if(typeof permAoEntrar==='function') permAoEntrar();
       authHideGate();
       // registra o último acesso (atualiza SÓ este campo; papel/ativo ficam iguais → seguro nas regras)
       try{ ref.set({ultimoAcesso:new Date().toISOString()},{merge:true}).catch(()=>{}); }catch(e){}
@@ -172,46 +175,58 @@ function authInit(){
 function authUpdateHeader(){
   const el=document.getElementById('userChip');
   if(el && window.CURRENT_USER){
-    const papel={admin:'Admin',editor:'Editor',leitor:'Leitor'}[window.CURRENT_USER.papel]||window.CURRENT_USER.papel;
+    const papel=(typeof permModeloNome==='function')?permModeloNome(window.CURRENT_USER.papel):window.CURRENT_USER.papel;
     el.innerHTML=`<span class="uname">${_h(window.CURRENT_USER.nome)}</span><span class="urole">${_h(papel)}</span>`;
     el.style.display='';
   }
 }
 
 // ---------- gestão de usuários (admin) ----------
+function _usuStatus(u){ return u.ativo ? 'ativo' : (u.bloqueadoEm ? 'bloqueado' : 'pendente'); }
+function _usuEhAdmin(u){ return isMasterUid(u.uid) || u.papel==='admin'; }
+// admin comum não mexe em outro admin (só o mestre cria, rebaixa ou bloqueia admins)
+function _usuPodeMexer(u){ const meMaster=isMasterUid(window.CURRENT_USER.uid); if(isMasterUid(u.uid)) return false; return meMaster || !_usuEhAdmin(u); }
+function _usuAcsTxt(u){
+  if(_usuEhAdmin(u) || !Array.isArray(u.acs)) return 'Todas';
+  return u.acs.length ? u.acs.map(_h).join(', ') : '<span style="color:var(--od)">Nenhuma</span>';
+}
 function renderUsuarios(){
   const el=document.getElementById('view-usuarios'); if(!el) return;
   if(!window.CURRENT_USER || window.CURRENT_USER.papel!=='admin'){
     el.innerHTML='<div class="wrap"><div class="cfbnote">Acesso restrito a administradores.</div></div>'; return;
   }
   el.innerHTML=`<h2 style="color:var(--navy);border-bottom:2px solid var(--gold);padding-bottom:6px">👥 Usuários</h2>
-    <div class="cfbnote">Libere ou bloqueie o acesso e defina o papel de cada pessoa. <b>Admin</b> = tudo + gestão de usuários; <b>Editor</b> = edita os dados; <b>Leitor</b> = só visualiza.</div>
-    <div class="tblwrap"><table class="cfbtable"><thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Status</th><th>Último acesso</th><th>Ações</th></tr></thead><tbody id="usuList"><tr><td colspan="6" style="padding:14px;color:#999">Carregando…</td></tr></tbody></table></div>`;
+    <div class="cfbnote">Libere ou bloqueie o acesso e defina as permissões de cada pessoa em <b>⚙ Permissões</b>: por tela (ver, criar, editar, excluir) e por aeronave. <b>Admin</b> tem tudo. Só o administrador-mestre cria ou mexe em outro Admin.</div>
+    <div class="tblwrap"><table class="cfbtable"><thead><tr><th>Nome</th><th>E-mail</th><th>Permissão</th><th>Aeronaves</th><th>E-mail de vencimentos</th><th>Status</th><th>Último acesso</th><th>Ações</th></tr></thead><tbody id="usuList"><tr><td colspan="8" style="padding:14px;color:#999">Carregando…</td></tr></tbody></table></div>`;
   DB.collection('usuarios').get().then(qs=>{
     const rows=[]; qs.forEach(d=>rows.push(Object.assign({uid:d.id},d.data())));
     rows.sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
     window._USU_CACHE={}; rows.forEach(u=>window._USU_CACHE[u.uid]=u);
     const tb=document.getElementById('usuList'); if(!tb) return;
+    const pillSt={ativo:'<span class="pill ok">Ativo</span>',pendente:'<span class="pill wn">Pendente</span>',bloqueado:'<span class="pill od">Bloqueado</span>'};
     tb.innerHTML = rows.length? rows.map(u=>{
-      const me=(u.uid===window.CURRENT_USER.uid);
-      const sel=['admin','editor','leitor'].map(p=>`<option value="${p}"${u.papel===p?' selected':''}>${p==='admin'?'Admin':p==='editor'?'Editor':'Leitor'}</option>`).join('');
+      const me=(u.uid===window.CURRENT_USER.uid), mexe=_usuPodeMexer(u)&&!me, st=_usuStatus(u);
+      const modelo=isMasterUid(u.uid)?'Admin (mestre)':permModeloNome(u.papel||'leitor');
       return `<tr>
         <td>${_h(u.nome)}${me?' <span class="basetag">você</span>':''}</td>
         <td>${_h(u.email)}</td>
-        <td><select class="usel" onchange="usuSetPapel('${u.uid}',this.value)"${me?' disabled':''}>${sel}</select></td>
-        <td>${u.ativo? '<span class="pill ok">Ativo</span>':'<span class="pill wn">Pendente</span>'}</td>
+        <td>${_h(modelo)}</td>
+        <td>${_usuAcsTxt(u)}</td>
+        <td>${u.notifEmail===false?'<span style="color:#aab">Não recebe</span>':'Recebe'}</td>
+        <td>${pillSt[st]}</td>
         <td class="num" style="white-space:nowrap">${usuFmtData(u.ultimoAcesso)}</td>
         <td class="usuacts">
-          ${me?'':(u.ativo
-            ? `<button class="btn o sm" onclick="usuSetAtivo('${u.uid}',false)">Bloquear</button>`
-            : `<button class="btn g sm" onclick="usuSetAtivo('${u.uid}',true)">Liberar</button>`)}
-          <button class="btn o sm" title="Editar nome" onclick="usuEditarNome('${u.uid}')">✎</button>
-          <button class="btn o sm" title="Enviar redefinição de senha" onclick="usuResetSenha('${u.uid}')">🔑</button>
-          ${me?'':`<button class="btn o sm" title="Remover" onclick="usuRemover('${u.uid}')">🗑</button>`}
+          <button class="btn o sm" title="Permissões" onclick="usuAbrirPerm('${_h(u.uid)}')">⚙ Permissões</button>
+          ${mexe?(u.ativo
+            ? `<button class="btn o sm" onclick="usuSetAtivo('${_h(u.uid)}',false)">Bloquear</button>`
+            : `<button class="btn g sm" onclick="usuSetAtivo('${_h(u.uid)}',true)">Liberar</button>`):''}
+          ${(mexe||me)?`<button class="btn o sm" title="Editar nome" onclick="usuEditarNome('${_h(u.uid)}')">✎</button>`:''}
+          <button class="btn o sm" title="Enviar redefinição de senha" onclick="usuResetSenha('${_h(u.uid)}')">🔑</button>
+          ${mexe?`<button class="btn o sm" title="Remover" onclick="usuRemover('${_h(u.uid)}')">🗑</button>`:''}
         </td>
       </tr>`;
-    }).join('') : '<tr><td colspan="6" style="padding:14px;color:#999">Nenhum usuário ainda.</td></tr>';
-  }).catch(e=>{ const tb=document.getElementById('usuList'); if(tb) tb.innerHTML='<tr><td colspan="6" style="padding:14px;color:#c0392b">Erro ao listar: '+(e&&e.message||e)+'</td></tr>'; });
+    }).join('') : '<tr><td colspan="8" style="padding:14px;color:#999">Nenhum usuário ainda.</td></tr>';
+  }).catch(e=>{ const tb=document.getElementById('usuList'); if(tb) tb.innerHTML='<tr><td colspan="8" style="padding:14px;color:#c0392b">Erro ao listar: '+_h(e&&e.message||e)+'</td></tr>'; });
 }
 function usuFmtData(iso){
   if(!iso) return '<span style="color:#aab">—</span>';
@@ -221,11 +236,99 @@ function usuFmtData(iso){
   }catch(e){ return '—'; }
 }
 function _usuNome(uid){ const u=(window._USU_CACHE||{})[uid]||{}; return u.nome||u.email||uid; }
-function usuSetPapel(uid,papel){
-  DB.collection('usuarios').doc(uid).set({papel:papel},{merge:true}).then(()=>{ toast('✔ Papel atualizado'); if(typeof logAction==='function') logAction('Alterou papel de usuário', _usuNome(uid)+' → '+papel); }).catch(e=>toast('⚠ '+(e.message||e)));
+
+// ---------- editor de permissões ----------
+let USUPERM=null; // {uid, modelo, p, acs, st, notif, trava}
+function _usuMats(){ try{ return (typeof docMatriculas==='function') ? docMatriculas() : Object.keys(STATE.acmaps||{}); }catch(e){ return []; } }
+function usuAbrirPerm(uid){
+  const u=(window._USU_CACHE||{})[uid]; if(!u) return;
+  const ef=permDoPerfil(u, isMasterUid(uid));
+  const modelo=_usuEhAdmin(u)?'admin':((PERM_MODELOS[u.papel]||u.papel==='personalizado')?u.papel:'leitor');
+  USUPERM={ uid:uid, modelo:modelo, p:JSON.parse(JSON.stringify(ef.p)), acs:(ef.acs==='todas'?'todas':ef.acs.slice()),
+    st:_usuStatus(u), notif:u.notifEmail!==false, trava:!_usuPodeMexer(u) || uid===window.CURRENT_USER.uid, nome:u.nome||u.email||'' };
+  let ov=document.getElementById('permOverlay');
+  if(!ov){ ov=document.createElement('div'); ov.className='overlay'; ov.id='permOverlay';
+    ov.innerHTML=`<div class="modal" style="width:820px;max-width:100%"><h3 id="permTitle">Permissões</h3><div class="mbody" style="display:block" id="permBody"></div>
+      <div class="mfoot"><span class="muted" style="font-size:11px" id="permNota"></span><div><button class="btn o" type="button" onclick="usuFecharPerm()">Cancelar</button><button class="btn p" type="button" id="permOk" onclick="usuSalvarPerm()">Salvar permissões</button></div></div></div>`;
+    ov.addEventListener('click',e=>{ if(e.target===ov) usuFecharPerm(); });
+    document.body.appendChild(ov); }
+  _usuDrawPerm(); ov.classList.add('show');
+}
+function usuFecharPerm(){ const ov=document.getElementById('permOverlay'); if(ov) ov.classList.remove('show'); USUPERM=null; }
+function _usuDrawPerm(){
+  const S=USUPERM; if(!S) return; const tr=S.trava, adm=S.modelo==='admin';
+  const meMaster=isMasterUid(window.CURRENT_USER.uid);
+  document.getElementById('permTitle').textContent='Permissões · '+S.nome;
+  const opts=Object.keys(PERM_MODELOS).filter(k=>k!=='admin'||meMaster||adm).map(k=>`<option value="${k}"${S.modelo===k?' selected':''}>${_h(PERM_MODELOS[k].n)}</option>`).join('')
+    +`<option value="personalizado"${S.modelo==='personalizado'?' selected':''}>Personalizado</option>`;
+  const dis=tr?' disabled':'';
+  const linha=t=>{
+    const fixo=t.adm||adm;
+    return `<tr><td style="text-align:left">${_h(t.n)}${t.ac?' <span class="basetag">por aeronave</span>':''}${t.d?`<div class="hint">${_h(t.d)}</div>`:''}</td>${PERM_OPS.map(o=>{
+      if(t.so && o!=='v') return '<td style="color:#aab">—</td>';
+      const on = adm ? true : (t.adm ? false : !!S.p[t.k][o]);
+      return `<td><input type="checkbox" data-t="${t.k}" data-o="${o}"${on?' checked':''}${(fixo||tr)?' disabled':''} aria-label="${_h(t.n)}: ${({v:'ver',c:'criar',e:'editar',x:'excluir'})[o]}"></td>`; }).join('')}</tr>`; };
+  const todas=adm||S.acs==='todas', mats=_usuMats();
+  document.getElementById('permBody').innerHTML=`
+    <div style="display:flex;flex-wrap:wrap;gap:12px 18px;align-items:flex-end;margin-bottom:12px">
+      <div class="fld"><label>Modelo de permissão</label><select id="pmModelo"${dis}>${opts}</select></div>
+      <div class="fld"><label>Situação</label><select id="pmSt"${dis}><option value="ativo"${S.st==='ativo'?' selected':''}>Ativo</option><option value="pendente"${S.st==='pendente'?' selected':''}>Pendente</option><option value="bloqueado"${S.st==='bloqueado'?' selected':''}>Bloqueado</option></select></div>
+      <label style="display:flex;gap:6px;align-items:center;font-size:12.5px"><input type="checkbox" id="pmNotif"${S.notif?' checked':''}${(tr&&S.uid!==window.CURRENT_USER.uid)?' disabled':''}> Recebe e-mail de vencimentos</label>
+    </div>
+    <div class="tblwrap"><table class="cfbtable" style="text-align:center"><thead><tr><th style="text-align:left">Tela</th><th>Ver</th><th>Criar</th><th>Editar</th><th>Excluir</th></tr></thead><tbody>${PERM_TELAS.map(linha).join('')}</tbody></table></div>
+    <div style="margin-top:12px"><b style="font-size:12.5px">Aeronaves</b>
+      <label style="margin-left:12px;font-size:12.5px"><input type="checkbox" id="pmTodas"${todas?' checked':''}${(tr||adm)?' disabled':''}> Todas (inclui as que forem cadastradas depois)</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${mats.map(m=>`<label class="basetag" style="font-size:12px;padding:4px 10px;display:flex;gap:5px;align-items:center"><input type="checkbox" class="pmAc" value="${_h(m)}"${(todas||(S.acs!=='todas'&&S.acs.indexOf(m)>=0))?' checked':''}${(tr||todas)?' disabled':''}> ${_h(m)}</label>`).join('')||'<span class="hint">Nenhuma aeronave cadastrada.</span>'}</div>
+    </div>
+    <div class="cfbnote" style="margin-top:12px" id="pmResumo"></div>`;
+  document.getElementById('permNota').textContent = tr ? (isMasterUid(S.uid)?'Administrador-mestre: acesso total, não pode ser alterado.':(S.uid===window.CURRENT_USER.uid?'Você não altera as próprias permissões (só o e-mail de vencimentos).':'Só o administrador-mestre altera outro Admin.')) : 'Criar, editar e excluir separados valem na tela. O banco garante a aeronave e se a pessoa pode alterar cada tela.';
+  document.getElementById('permOk').style.display = (tr && S.uid!==window.CURRENT_USER.uid) ? 'none' : '';
+  const body=document.getElementById('permBody');
+  const pm=document.getElementById('pmModelo'); if(pm) pm.onchange=()=>{ const k=pm.value; S.modelo=k; if(PERM_MODELOS[k]) S.p=PERM_MODELOS[k].p(); if(k==='admin') S.acs='todas'; _usuDrawPerm(); };
+  document.getElementById('pmSt').onchange=e=>{ S.st=e.target.value; _usuResumo(); };
+  document.getElementById('pmNotif').onchange=e=>{ S.notif=e.target.checked; };
+  body.querySelectorAll('input[data-t]').forEach(cb=>cb.onchange=()=>{
+    const c=S.p[cb.dataset.t], o=cb.dataset.o; c[o]=cb.checked;
+    if(o!=='v'&&cb.checked) c.v=true;            // quem cria/edita/exclui precisa ver
+    if(o==='v'&&!cb.checked){ c.c=c.e=c.x=false; } // tirou o ver, tira o resto
+    S.modelo='personalizado'; _usuDrawPerm();
+  });
+  document.getElementById('pmTodas').onchange=e=>{ S.acs=e.target.checked?'todas':[]; _usuDrawPerm(); };
+  body.querySelectorAll('.pmAc').forEach(cb=>cb.onchange=()=>{ const a=cb.value; if(S.acs==='todas') S.acs=[]; S.acs=cb.checked?[...new Set([...S.acs,a])]:S.acs.filter(x=>x!==a); _usuResumo(); });
+  _usuResumo();
+}
+function _usuResumo(){
+  const S=USUPERM, el=document.getElementById('pmResumo'); if(!S||!el) return;
+  if(isMasterUid(S.uid)){ el.innerHTML='<b>Administrador-mestre.</b> Acesso total e à prova de bloqueio.'; return; }
+  if(S.modelo==='admin'){ el.innerHTML='<b>Admin:</b> vê e altera tudo, em todas as aeronaves, e gerencia usuários.'+(S.st!=='ativo'?' <b style="color:var(--warn)">Situação: '+S.st+', sem acesso por enquanto.</b>':''); return; }
+  const telas=PERM_TELAS.filter(t=>!t.adm);
+  const ve=telas.filter(t=>S.p[t.k].v).length;
+  const alt=telas.filter(t=>{ const c=S.p[t.k]; return c.c||c.e||c.x; }).map(t=>t.n);
+  const acs=S.acs==='todas'?'todas as aeronaves':(S.acs.length?S.acs.map(_h).join(', '):'<b style="color:var(--od)">nenhuma aeronave</b>');
+  el.innerHTML=`<b>${_h(S.nome)}</b> vê ${ve} de ${telas.length} telas, em ${acs}. `+(alt.length?'Pode alterar: '+alt.map(_h).join(', ')+'.':'Não altera nada (só leitura).')+(S.st!=='ativo'?` <b style="color:var(--warn)">Situação: ${S.st}, sem acesso por enquanto.</b>`:'');
+}
+function usuSalvarPerm(){
+  const S=USUPERM; if(!S) return; const ref=DB.collection('usuarios').doc(S.uid);
+  // a própria pessoa só muda o e-mail de vencimentos
+  if(S.trava){
+    if(S.uid!==window.CURRENT_USER.uid) return;
+    ref.set({notifEmail:S.notif},{merge:true}).then(()=>{ toast('✔ Preferência de e-mail salva'); usuFecharPerm(); renderUsuarios(); }).catch(e=>toast('⚠ '+(e.message||e)));
+    return;
+  }
+  const adm=S.modelo==='admin';
+  const perm={}; PERM_TELAS.forEach(t=>{ if(t.adm) return; perm[t.k]={v:!!S.p[t.k].v,c:!t.so&&!!S.p[t.k].c,e:!t.so&&!!S.p[t.k].e,x:!t.so&&!!S.p[t.k].x}; });
+  const rec={ papel:S.modelo, perm:perm, acs:(adm?'todas':S.acs), notifEmail:S.notif, ativo:S.st==='ativo',
+    bloqueadoEm:(S.st==='bloqueado'?(((window._USU_CACHE||{})[S.uid]||{}).bloqueadoEm||new Date().toISOString()):null),
+    permAlteradoEm:new Date().toISOString(), permAlteradoPor:window.CURRENT_USER.nome||window.CURRENT_USER.email||'' };
+  if(!adm && rec.acs!=='todas' && !rec.acs.length && !window.confirm('Nenhuma aeronave marcada: '+S.nome+' não verá nenhum mapa. Salvar assim?')) return;
+  const nome=S.nome, resumo=permModeloNome(S.modelo)+' · '+(rec.acs==='todas'?'todas as aeronaves':rec.acs.join(', '))+' · '+S.st;
+  ref.set(rec,{merge:true}).then(()=>{ toast('✔ Permissões salvas'); if(typeof logAction==='function') logAction('Alterou papel de usuário', nome+' → '+resumo); usuFecharPerm(); renderUsuarios(); }).catch(e=>toast('⚠ '+(e.message||e)));
 }
 function usuSetAtivo(uid,ativo){
-  DB.collection('usuarios').doc(uid).set({ativo:ativo},{merge:true}).then(()=>{ toast(ativo?'✔ Acesso liberado':'✔ Acesso bloqueado'); if(typeof logAction==='function') logAction(ativo?'Liberou usuário':'Bloqueou usuário', _usuNome(uid)); renderUsuarios(); }).catch(e=>toast('⚠ '+(e.message||e)));
+  const u=(window._USU_CACHE||{})[uid]||{};
+  if(!ativo && !window.confirm('Bloquear o acesso de '+(u.nome||u.email||'este usuário')+'?')) return;
+  const rec=ativo?{ativo:true,bloqueadoEm:null}:{ativo:false,bloqueadoEm:new Date().toISOString()};
+  DB.collection('usuarios').doc(uid).set(rec,{merge:true}).then(()=>{ toast(ativo?'✔ Acesso liberado':'✔ Acesso bloqueado'); if(typeof logAction==='function') logAction(ativo?'Liberou usuário':'Bloqueou usuário', _usuNome(uid)); renderUsuarios(); }).catch(e=>toast('⚠ '+(e.message||e)));
 }
 function usuEditarNome(uid){
   const u=(window._USU_CACHE||{})[uid]||{};
