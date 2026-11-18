@@ -659,6 +659,7 @@
   .hm .hm-ac .model{font-size:12.5px;color:var(--hm-muted);margin-top:3px}
   .hm .hm-st{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:999px;white-space:nowrap}
   .hm .hm-st.od{background:var(--hm-od-bg);color:var(--hm-od)} .hm .hm-st.wn{background:var(--hm-wn-bg);color:var(--hm-wn)} .hm .hm-st.ok{background:var(--hm-ok-bg);color:var(--hm-ok)} .hm .hm-st.na{background:var(--hm-note);color:var(--hm-muted)}
+  .hm .hm-ac.hm-fora{opacity:.62;filter:grayscale(.6)} .hm .hm-ac.hm-fora:hover,.hm .hm-ac.hm-fora:focus{opacity:.9} .hm .hm-foratxt{margin-bottom:6px}
   .hm .hdr-right{display:flex;align-items:center;gap:2px;position:relative}
   .hm .hm-kebab{font:inherit;border:0;background:transparent;color:var(--hm-muted);font-size:18px;line-height:1;padding:2px 7px;border-radius:6px;cursor:pointer}
   .hm .hm-kebab:hover{background:var(--hm-note)}
@@ -733,6 +734,7 @@
   <button class="navbtn active" data-view="inicio"><span class="ni">🏠</span><span class="nl">Início</span></button>
   <button class="navbtn" data-view="mapa"><span class="ni">🛠</span><span class="nl">Mapa de Manutenção</span></button>
   <button class="navbtn" data-view="freq"><span class="ni">📊</span><span class="nl">Atividades &amp; Frequências</span></button>
+  <button class="navbtn" data-view="listafrota"><span class="ni">✈️</span><span class="nl">Gestão da Frota (MGM 2.9)</span></button>
   <button class="navbtn" data-view="obrig"><span class="ni">📋</span><span class="nl">Obrigações MGM (SASC / PMAC)</span></button>
   <button class="navbtn" data-view="sasc"><span class="ni">🛡</span><span class="nl">SASC</span></button>
   <button class="navbtn" data-view="forms"><span class="ni">📝</span><span class="nl">Formulários</span></button>
@@ -823,6 +825,7 @@
 </div>
 
 <div class="wrap" id="view-obrig" style="display:none"></div>
+<div class="wrap" id="view-listafrota" style="display:none"></div>
 
 <div class="wrap" id="view-forms" style="display:none"></div>
 <div class="wrap" id="view-usuarios" style="display:none"></div>
@@ -987,6 +990,7 @@
 <script src="auth.js"></script>
 <script src="docs.js"></script>
 <script src="auditorias.js"></script>
+<script src="frota_lista.js"></script>
 <script src="perm.js"></script>
 <script>
   if('serviceWorker' in navigator){

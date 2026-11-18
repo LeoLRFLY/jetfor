@@ -63,11 +63,12 @@ service cloud.firestore {
       // _geral: cada campo exige a permissão da tela dele
       allow create: if doc == '_geral' && (admin() || alt('mapa'));
       allow update: if doc == '_geral' && ativo()
-                    && mudou().difference(['updatedAt','frota','hoje','osProx','docsGeral','docCatsGeral','confiab','confiabCfg','rsiEnvios'].toSet()).size() == 0
+                    && mudou().difference(['updatedAt','frota','hoje','osProx','docsGeral','docCatsGeral','confiab','confiabCfg','rsiEnvios','listaFrota'].toSet()).size() == 0
                     && (!mudou().hasAny(['frota'])                         || (alt('mapa') && todasAc()))
                     && (!mudou().hasAny(['hoje','osProx'])                 || alt('mapa'))
                     && (!mudou().hasAny(['docsGeral','docCatsGeral'])      || alt('geral'))
-                    && (!mudou().hasAny(['confiab','confiabCfg','rsiEnvios']) || alt('sasc'));
+                    && (!mudou().hasAny(['confiab','confiabCfg','rsiEnvios']) || alt('sasc'))
+                    && (!mudou().hasAny(['listaFrota'])                     || alt('listafrota'));
       // campo novo que ainda não está na lista acima: só admin
       allow update: if doc == '_geral' && admin();
 

@@ -1,8 +1,8 @@
 /* JetFor · Controle de Manutenção — Service Worker (PWA) */
-const CACHE = 'jetfor-mnt-v71';
+const CACHE = 'jetfor-mnt-v73';
 const SHELL = [
   './', './index.html', './app.js', './config.js', './data.js',
-  './freq_data.js', './dash_data.js', './da_data.js', './acmaps_data.js', './patch_data.js', './reclass_data.js', './full_data.js', './iio_data.js', './forms.js', './auth.js', './docs.js', './auditorias.js', './perm.js',
+  './freq_data.js', './dash_data.js', './da_data.js', './acmaps_data.js', './patch_data.js', './reclass_data.js', './full_data.js', './iio_data.js', './forms.js', './auth.js', './docs.js', './auditorias.js', './perm.js', './frota_lista.js',
   './favicon.ico', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png',
   './icons/apple-touch-icon.png', './icons/favicon-32.png'

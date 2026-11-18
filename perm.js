@@ -18,6 +18,7 @@ window.PERM_TELAS = [
   {k:'freq',     n:'Atividades & Frequências',     d:'Resumo das tarefas', ac:true, so:'v'},
   {k:'docsac',   n:'Documentos da aeronave',       d:'Anexos de cada aeronave', ac:true},
   {k:'geral',    n:'Pasta Geral',                  d:'Documentos da empresa'},
+  {k:'listafrota',n:'Gestão da Frota (MGM 2.9)',   d:'Lista da frota (modelo 8.4.23): criar = incluir aeronave / emitir revisão; excluir = retirar da frota'},
   {k:'obrig',    n:'Obrigações MGM (SASC / PMAC)', d:'', so:'v'},
   {k:'sasc',     n:'SASC',                         d:'Confiabilidade, níveis de alerta e RSI'},
   {k:'oficinas', n:'Oficinas & Auditorias',        d:'Oficinas, inspetores, MGM e auditorias'},
@@ -44,7 +45,7 @@ window.PERM_MODELOS = {
   editor:   {n:'Editor',          p:()=>_permOnly('*',['v','c','e','x'])},
   leitor:   {n:'Leitor',          p:()=>_permOnly('*',['v'])},
   mecanico: {n:'Mecânico',        p:()=>{ const p=_permOnly(['inicio','freq','mapa','docsac','forms','geral'],['v']); p.mapa={v:true,c:false,e:true,x:false}; return p; }},
-  auditor:  {n:'Auditor externo', p:()=>_permOnly(['inicio','mapa','docsac','obrig','sasc','oficinas'],['v'])}
+  auditor:  {n:'Auditor externo', p:()=>_permOnly(['inicio','mapa','docsac','listafrota','obrig','sasc','oficinas'],['v'])}
 };
 function permModeloNome(k){ return (PERM_MODELOS[k]&&PERM_MODELOS[k].n) || (k==='personalizado'?'Personalizado':(k||'—')); }
 
@@ -86,7 +87,7 @@ function pode(tela, op, ac){
   return true;
 }
 function podeAlterar(tela, ac){ return pode(tela,'c',ac)||pode(tela,'e',ac)||pode(tela,'x',ac); }
-function podeAlgumaAlteracao(){ return ['mapa','docsac','geral','sasc','oficinas'].some(t=>podeAlterar(t)); }
+function podeAlgumaAlteracao(){ return ['mapa','docsac','geral','sasc','oficinas','listafrota'].some(t=>podeAlterar(t)); }
 function podeOuAvisa(tela, op, ac){
   if(pode(tela,op,ac)) return true;
   const nome=(PERM_TELAS.find(t=>t.k===(tela==='frota'?'mapa':tela))||{}).n||tela;
@@ -157,6 +158,16 @@ const PERM_GUARDS = {
   ofMgmDel:           ()=>['oficinas','e'],
   salvarAuditoria:    ()=>['oficinas', (typeof AUDCTX!=='undefined' && AUDCTX.aud>=0)?'e':'c'],
   excluirAuditoria:   ()=>['oficinas','x'],
+  // Gestão da Frota (MGM 2.9)
+  lfEditar:           ()=>['listafrota','e'],
+  lfSalvar:           ()=>['listafrota','e'],
+  lfAbrirEmissao:     ()=>['listafrota','c'],
+  lfEmitir:           ()=>['listafrota','c'],
+  lfExcluirRev:       ()=>['listafrota','x'],
+  lfAbrirInclusao:    ()=>['listafrota','c'],
+  lfIncluir:          ()=>['listafrota','c'],
+  lfRetirar:          ()=>['listafrota','x'],
+  lfReincluir:        ()=>['listafrota','c'],
   // Importar substitui tudo: só admin
   importJSON:         ()=>['_admin','x']
 };
@@ -191,6 +202,9 @@ const PERM_HIDE = {
   'docsac-c':['#view-mapa #docUp','#view-mapa #docNewCat','#view-mapa #docSync','#view-mapa #docFile'],
   'docsac-e':['#view-mapa .docmove'],
   'docsac-x':['#view-mapa .docdel','#view-mapa .catdel'],
+  'listafrota-c':['#view-listafrota .lfnew','#view-listafrota .lfinc','#view-listafrota .lfre'],
+  'listafrota-e':['#view-listafrota .lfedit'],
+  'listafrota-x':['#view-listafrota .lfdel','#view-listafrota .lfret'],
   'oficinas-c':['#ofAdd','#audNew','[onclick^="openOficinaModal(null"]'],
   'oficinas-e':['[data-ofedit]','[onclick^="ofInspAdd"]','[onclick^="ofInspDel"]','[onclick^="ofInspDesignacao"]','[onclick^="ofMgmAdd"]','[onclick^="ofMgmDel"]','#audAddNc','#audAddAc'],
   'oficinas-x':['[data-ofdel]','[data-auddel]','[onclick^="excluirAuditoria"]']
