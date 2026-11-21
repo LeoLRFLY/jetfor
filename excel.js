@@ -65,7 +65,7 @@ const MAPA_COLS=[
   {k:'nome',h:'Nomenclatura',w:38},{k:'pn',h:'P/N',w:14},{k:'sn',h:'S/N',w:12},{k:'base',h:'Contador base',w:15},
   {k:'intervalo',h:'Intervalo',w:10,num:1},{k:'exec',h:'Últ. exec.',w:11,num:1},{k:'vfix',h:'Vence fixo (LLP)',w:11,num:1},
   {k:'venc',h:'Vence (VENC)',w:12,num:1},{k:'disp',h:'Restante (DISP)',w:12,num:1},{k:'unid',h:'Unid.',w:7},
-  {k:'calm',h:'Cal. meses',w:7,num:1},{k:'cald',h:'Cal. últ. exec.',w:12,num:1},{k:'calv',h:'Cal. vence',w:12,num:1},{k:'cali',h:'Cal. restante (dias)',w:11,num:1},
+  {k:'calm',h:'Cal. meses',w:7,num:1},{k:'cald',h:'Cal. últ. exec.',w:12,num:1},{k:'cala',h:'Cal. data alvo 🎯',w:12,num:1},{k:'calv',h:'Cal. vence',w:12,num:1},{k:'cali',h:'Cal. restante (dias)',w:11,num:1},
   {k:'obs',h:'Observações',w:30},{k:'status',h:'Status',w:11},{k:'id',h:'ID (não alterar)',w:13}];
 
 function unidadeTxt(t){
@@ -90,7 +90,7 @@ function sheetMapa(wb, ac, m, sub, emit, itens, titulo, aba){
     const vals={n, grupo:t.grupo||'', categoria:CAT_LABEL[t.categoria]||t.categoria||'', unidade:unidadeTxt(t), nome:t.nome||'', pn:t.pn||'', sn:t.sn||'',
       base:baseTxt(t), intervalo:t.intervalo!=null?num(t.intervalo):null, exec:t.exec!=null?num(t.exec):null, vfix:t.vencFixo!=null?num(t.vencFixo):null,
       venc:c.num?c.num.venc:null, disp:c.num?c.num.disp:null, unid:u,
-      calm:t.cal&&t.cal.meses!=null?num(t.cal.meses):null, cald:t.cal&&t.cal.exec?isoToDate(t.cal.exec):null,
+      calm:t.cal&&t.cal.meses!=null?num(t.cal.meses):null, cald:t.cal&&t.cal.exec?isoToDate(t.cal.exec):null, cala:t.cal&&t.cal.alvo?isoToDate(t.cal.alvo):null,
       calv:c.cal?d12(c.cal.venc):null, cali:c.cal?c.cal.disp:null, obs:t.obs||'', status:ST[c.status].t, id:t.id||''};
     const row=W.addRow(MAPA_COLS.map(col=>vals[col.k]));
     row.height=18;
@@ -101,7 +101,7 @@ function sheetMapa(wb, ac, m, sub, emit, itens, titulo, aba){
     });
     const col=key=>MAPA_COLS.findIndex(x=>x.k===key)+1;
     ['intervalo','exec','vfix','venc','disp'].forEach(key=>row.getCell(col(key)).numFmt='#,##0.0;[Red]-#,##0.0');
-    ['cald','calv'].forEach(key=>row.getCell(col(key)).numFmt='dd/mm/yyyy');
+    ['cald','cala','calv'].forEach(key=>row.getCell(col(key)).numFmt='dd/mm/yyyy');
     row.getCell(col('cali')).numFmt='0;[Red]-0';
     if(c.num&&c.num.disp<0) row.getCell(col('disp')).font={name:FONT,size:9,bold:true,color:{argb:ST.od.fg}};
     if(c.cal&&c.cal.disp<0) row.getCell(col('cali')).font={name:FONT,size:9,bold:true,color:{argb:ST.od.fg}};
@@ -261,12 +261,13 @@ async function baixarModelo(){
       {h:'Vence fixo (LLP)',w:12,num:1,dec:1,note:'Use no lugar de Intervalo + Últ. exec. para limite de vida'},
       {h:'Cal. meses',w:9,num:1,int:1,note:'Limite em meses (co-limite ou só calendário)'},
       {h:'Cal. últ. exec.',w:13,num:1,date:1,note:'Data da última execução (dd/mm/aaaa)'},
+      {h:'Cal. data alvo',w:13,num:1,date:1,note:'Opcional: validade fixa da peça (ex.: bateria). Vale o que vencer primeiro.'},
       {h:'Observações',w:30}];
     const T=wb.addWorksheet('Tarefas',{views:[{state:'frozen',ySplit:6,showGridLines:false}],properties:{tabColor:{argb:NAVY}}});
     T.columns=cols.map(c=>({width:c.w}));
     banner(wb,T,'TAREFAS DO MAPA — IMPORTAÇÃO EM MASSA','Campos em dourado são obrigatórios',cols.length,'A linha 7 é um exemplo: apague ou substitua');
     headerRow(T,6,cols);
-    const ex=T.addRow(['','INSPEÇÕES PERIÓDICAS','Célula','','PHASE 1/2 (exemplo)','','','Célula · h',150,4307.1,null,24,new Date(2026,5,5,12),'AXIAL']);
+    const ex=T.addRow(['','INSPEÇÕES PERIÓDICAS','Célula','','PHASE 1/2 (exemplo)','','','Célula · h',150,4307.1,null,24,new Date(2026,5,5,12),null,'AXIAL']);
     ex.eachCell({includeEmpty:true},c=>{ c.font={name:FONT,italic:true,size:9,color:{argb:'FF667085'}}; c.fill=fill('FFF2F4F7'); });
     ex.getCell(13).numFmt='dd/mm/yyyy';
     for(let rr=7;rr<=1006;rr++) cols.forEach((c,i)=>{ const cell=T.getCell(rr,i+1);
@@ -325,7 +326,7 @@ function txt(v){ v=cellV(v); if(v==null) return ''; if(v instanceof Date) return
 const HEAD_ALIAS={
   id:['ID VAZIO NOVO','ID NAO ALTERAR','ID'], grupo:['GRUPO'], categoria:['CATEGORIA'], unidade:['UNIDADE'],
   nome:['NOMENCLATURA'], pn:['P N','PN'], sn:['S N','SN'], base:['CONTADOR BASE','BASE'], intervalo:['INTERVALO'],
-  exec:['ULT EXEC'], vfix:['VENCE FIXO LLP','VENCE FIXO'], calm:['CAL MESES'], cald:['CAL ULT EXEC'], obs:['OBSERVACOES','OBS']};
+  exec:['ULT EXEC'], vfix:['VENCE FIXO LLP','VENCE FIXO'], calm:['CAL MESES'], cald:['CAL ULT EXEC'], cala:['CAL DATA ALVO','DATA ALVO','VENCE EM DATA ALVO'], obs:['OBSERVACOES','OBS']};
 function mapHeaders(row){
   const map={};
   row.eachCell({includeEmpty:false},(cell,ci)=>{ const h=nrm(txt(cell.value)).replace(/ \*$/,'').trim();
@@ -385,7 +386,8 @@ function lerTarefas(ws, avisosGlobais){
     if(intervalo!=null) L.campos.intervalo=intervalo;
     if(exec!=null) L.campos.exec=exec;
     if(vfix!=null) L.campos.vencFixo=vfix;
-    if(calm!=null||cald){ L.campos.cal={}; if(calm!=null) L.campos.cal.meses=Math.round(calm); if(cald) L.campos.cal.exec=cald; }
+    let cala; if(H.cala){ cala=parseDate(g('cala')); if(Number.isNaN(cala)){ L.erros.push('Data inválida em Cal. data alvo: "'+txt(g('cala'))+'"'); cala=undefined; } }
+    if(calm!=null||cald||cala){ L.campos.cal={}; if(calm!=null) L.campos.cal.meses=Math.round(calm); if(cald) L.campos.cal.exec=cald; if(cala) L.campos.cal.alvo=cala; }
     if(pb){
       L.campos.tipoVenc=pb.tipo;
       if(pb.base!==undefined){ L.campos.base=pb.base; }
@@ -402,7 +404,7 @@ function lerTarefas(ws, avisosGlobais){
     // avisos de vencimento
     const b=L.campos.base, numerico=(L.baseTpl||(b&&b!=='calendario'));
     if(numerico && vfix==null && (intervalo==null||exec==null) && !id) L.avisos.push('Sem Intervalo + Últ. exec. (nem Vence fixo): o item entra sem vencimento por contador');
-    if(L.campos.tipoVenc==='calendario' && !(L.campos.cal&&L.campos.cal.meses&&L.campos.cal.exec) && !id) L.avisos.push('Calendário sem meses ou sem data: o item entra sem vencimento');
+    if(L.campos.tipoVenc==='calendario' && !(L.campos.cal&&((L.campos.cal.meses&&L.campos.cal.exec)||L.campos.cal.alvo)) && !id) L.avisos.push('Calendário sem meses ou sem data: o item entra sem vencimento');
     // "Todas": uma linha por unidade
     if(L.baseTpl && L.unit==='todas'){
       const n=nU(L.campos.categoria); if(!n){ L.erros.push('A aeronave não tem '+(L.campos.categoria==='motor'?'motores':'hélices')+' cadastrados'); linhas.push(L); continue; }
@@ -466,7 +468,8 @@ function diffTarefa(t, campos){
     if(!eq) d.push(l+': '+fv(k,a)+' → '+fv(k,b)); });
   if(campos.cal){ const a=t.cal||{};
     if(campos.cal.meses!=null && num(a.meses)!==campos.cal.meses) d.push('Cal. meses: '+fv('',a.meses)+' → '+campos.cal.meses);
-    if(campos.cal.exec && a.exec!==campos.cal.exec) d.push('Cal. últ. exec.: '+(a.exec?fmtDate(new Date(a.exec+'T00:00:00')):'—')+' → '+fmtDate(new Date(campos.cal.exec+'T00:00:00'))); }
+    if(campos.cal.exec && a.exec!==campos.cal.exec) d.push('Cal. últ. exec.: '+(a.exec?fmtDate(new Date(a.exec+'T00:00:00')):'—')+' → '+fmtDate(new Date(campos.cal.exec+'T00:00:00')));
+    if(campos.cal.alvo && a.alvo!==campos.cal.alvo) d.push('Cal. data alvo: '+(a.alvo?fmtDate(new Date(a.alvo+'T00:00:00')):'—')+' → '+fmtDate(new Date(campos.cal.alvo+'T00:00:00'))); }
   return d;
 }
 function diffDA(r, campos){
@@ -631,7 +634,7 @@ async function aplicarImport(){
     if(x.acao==='atualizar' && x.alvo && byId[x.alvo]){ aplicaCampos(byId[x.alvo],x.campos); uT++; return; }
     const t={id:novoId(ac),grupo:'IMPORTADOS',categoria:'celula',unidade:null,nome:'',pn:'',sn:'',obs:'',base:null,tipoVenc:'na',intervalo:null,exec:null,vencFixo:null,cal:null};
     aplicaCampos(t,x.campos); if(x.sufixo) t.nome=t.nome+x.sufixo;
-    if(t.cal && t.cal.meses==null && !t.cal.exec) t.cal=null;
+    if(t.cal && t.cal.meses==null && !t.cal.exec && !t.cal.alvo) t.cal=null;
     m.tarefas.push(t); byId[t.id]=t; nT++;
   });
   STATE.tarefas=m.tarefas;
