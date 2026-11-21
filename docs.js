@@ -2,7 +2,7 @@
    Upload via Firebase Storage, metadados no Firestore/local. */
 
 const DOC_CATS_AC = ['PMA','Manuais Técnicos','ICA / Grandes Modificações','Certificados & Seguro','Cadernetas','Fichas (FCDA/IIO)','Outros'];
-const DOC_CATS_GERAL = ['MGM','MGO','MGSO','PMA (modelos)','IS / Regulamentos ANAC','Formulários','Auditoria de Oficinas','Outros'];
+const DOC_CATS_GERAL = ['MGM','MGO','MGSO','PMA (modelos)','IS / Regulamentos ANAC','Formulários','Auditoria de Oficinas','O.S. de oficina','Outros'];
 
 let STORAGE = null;
 function initStorage(){
@@ -42,6 +42,8 @@ function fmtMB(b){ return b==null?'':(b/1048576).toFixed(b<1048576?2:1)+' MB'; }
 async function uploadDoc(scope, file, categoria, meta, defer){
   if(!STORAGE){ toast('⚠ Ative o Firebase Storage no console pra enviar arquivos'); return null; }
   if(!file){ toast('Selecione um arquivo'); return null; }
+  // v81: não duplica — mesmo nome e mesmo tamanho já existe nesta pasta
+  if(docList(scope).some(d=>d.nome===file.name && (d.tamanho==null || d.tamanho===file.size))){ toast('⚠ "'+file.name+'" já está no sistema — não enviei de novo'); return null; }
   const safe = file.name.replace(/[^\w.\- ]+/g,'_');
   const path = 'docs/'+(scope==='geral'?'_geral':scope)+'/'+Date.now()+'_'+safe;
   try{
@@ -75,6 +77,27 @@ async function excluirDoc(scope, id){
   renderDocs(scope);
 }
 
+// v81: ordena O.S. ("OS 013 PS-ALT 2026.pdf") por ano e número, mais novas primeiro; demais mantêm a ordem
+function osKey(nome){ const m=String(nome||'').toUpperCase().match(/\bO\.?S\.?\s*0*(\d{1,5})\b.*?\b(20\d\d|19\d\d)\b/); return m?(+m[2])*100000+(+m[1]):null; }
+function sortDocsOS(arr){
+  return arr.map((d,i)=>({d,i,k:osKey(d.nome)})).sort((a,b)=>{
+    if(a.k!=null && b.k!=null) return b.k-a.k;
+    if(a.k!=null) return -1; if(b.k!=null) return 1; return a.i-b.i;
+  }).map(x=>x.d);
+}
+async function subirOSAeronave(mat, files, btn){
+  if(!files || !files.length){ toast('Escolha o(s) PDF(s) da O.S.'); return; }
+  if(btn) btn.disabled=true; let ok=0;
+  for(const f of files){
+    const acs=[...new Set(detectAcsFromName(f.name).concat([mat]))];
+    const r=await uploadDoc('geral', f, 'O.S. de oficina', {acs}, /*defer*/true);
+    if(r) ok++;
+  }
+  if(ok){ saveAll(); if(typeof logAction==='function') logAction('Subiu O.S. de oficina', ok+' arquivo(s) · '+mat); }
+  if(btn) btn.disabled=false;
+  toast('✔ '+ok+'/'+files.length+' O.S. enviada(s) para a Pasta Geral');
+  renderDocs(mat);
+}
 function docIcon(tipo,nome){
   const n=(nome||'').toLowerCase();
   if((tipo||'').includes('pdf')||n.endsWith('.pdf')) return '📕';
@@ -114,7 +137,7 @@ function renderDocs(scope){
   }
   const custom = customCats(scope);
   cats.forEach(cat=>{
-    const items = list.filter(d=>d.categoria===cat);
+    const items = sortDocsOS(list.filter(d=>d.categoria===cat));
     const isCustom = custom.indexOf(cat)>=0;
     h += `<div class="doccat"><h3><span>${esc(cat)}</span><span class="muted">(${items.length})${isCustom?` <button class="btn o sm catdel no-print" data-cat="${esc(cat)}" title="remover pasta">×</button>`:''}</span></h3>`;
     if(!items.length){ h += `<div class="docrow muted">— vazio —</div>`; }
@@ -138,8 +161,14 @@ function renderDocs(scope){
   });
   // Na pasta de uma aeronave: mostra os documentos da Pasta Geral vinculados a ela
   if(!isGeral){
-    const vinc = geralVinculadosAC(scope);
+    const vinc = sortDocsOS(geralVinculadosAC(scope));
     h += `<div class="doccat"><h3><span>📎 Da Pasta Geral (vinculados a esta aeronave)</span><span class="muted">(${vinc.length})</span></h3>`;
+    h += `<div class="docup no-print" style="margin:4px 0 8px">
+        ${typeof osTerralBtn==='function'?osTerralBtn():''}
+        <input type="file" id="osAcFile" multiple accept="application/pdf,.pdf">
+        <button class="btn g sm" id="osAcUp">⬆ Subir O.S.</button>
+        <span class="muted" style="font-size:12px">Vai para a Pasta Geral → O.S. de oficina, já vinculada a ${esc(scope)}. Abre para qualquer usuário do app.</span>
+      </div>`;
     if(!vinc.length){ h += `<div class="docrow muted">— nenhum documento da pasta geral vinculado —</div>`; }
     else vinc.forEach(d=>{
       h += `<div class="docrow">
@@ -182,6 +211,8 @@ function renderDocs(scope){
   }));
   target.querySelectorAll('.docaced').forEach(c=>c.addEventListener('change',()=>toggleDocAc(c.dataset.id, c.value)));
   target.querySelectorAll('.docdel').forEach(b=>b.addEventListener('click',()=>excluirDoc(scope, b.dataset.id)));
+  const osUp = target.querySelector('#osAcUp');
+  if(osUp) osUp.addEventListener('click',()=>subirOSAeronave(scope, target.querySelector('#osAcFile').files, osUp));
   const nc = target.querySelector('#docNewCat');
   if(nc) nc.addEventListener('click',()=>addDocCat(scope));
   const sy = target.querySelector('#docSync');
