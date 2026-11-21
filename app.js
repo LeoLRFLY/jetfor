@@ -190,7 +190,8 @@ function seedAllAC(){
         if(d.contadores) m.contadores=d.contadores;
         if(d.tarefas) m.tarefas=d.tarefas;
         if(d.da) m.da=d.da;
-        migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac);
+        applyMiccaReplace(m,ac); migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac);
+        persistMicca(ac);
         if($('#view-inicio').dataset.done) drawFleet();
       }
     }).catch(e=>console.error('seed get '+ac,e));
@@ -216,7 +217,8 @@ function subscribeAC(ac){
     if(d.docCatsExtra) m.docCatsExtra=d.docCatsExtra;
     if(d.grupos) m.grupos=d.grupos;
     if(d.baixas) m.baixas=d.baixas;
-    migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac);
+    applyMiccaReplace(m,ac); migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac);
+    persistMicca(ac);
     if(ac===STATE.currentAC){ STATE.contadores=m.contadores; STATE.tarefas=m.tarefas; renderCounters(); renderTable(); }
   });
 }
@@ -296,8 +298,39 @@ function reclassGroups(m, ac){
 }
 // reconstrói o mapa IDÊNTICO ao Excel (window.JETFOR_FULL[ac]) preservando as baixas do usuário.
 // Substitui m.tarefas pela lista fiel; transfere exec/cal/obs/hist de quem já tem baixa (por nome + ordem de ocorrência).
+// v76: troca o mapa INTEIRO pela MICCA (window.JETFOR_MICCA[ac]), uma única vez.
+// Reconhece que já trocou pelo prefixo dos IDs (ex.: FHNM-). Guarda a lista antiga p/ cópia de segurança.
+function applyMiccaReplace(m, ac){
+  const M=window.JETFOR_MICCA&&window.JETFOR_MICCA[ac]; if(!M||!m) return false;
+  const ts=m.tarefas||[];
+  if(ts.some(t=>t&&String(t.id||'').indexOf(M.prefixo)===0)) return false;
+  const c=m.contadores=m.contadores||{}; const orig=JSON.parse(JSON.stringify(c));
+  m._miccaBackup={versao:M.versao, em:new Date().toISOString(), tarefas:ts, contadores:orig};
+  m.tarefas=JSON.parse(JSON.stringify(M.tarefas));
+  // contadores da MICCA: só entram se o do app estiver vazio, menor, ou for a cópia antiga do TSN/CSN (TSO/CSO)
+  Object.keys(M.contadores||{}).forEach(k=>{
+    const v=M.contadores[k], a=num(orig[k]);
+    const copia=/_(tso|cso)$/.test(k) && orig[k]!=null && a===num(orig[k.replace(/_tso$/,'_tsn').replace(/_cso$/,'_csn')]);
+    if(a==null || a<v || copia) c[k]=v;
+  });
+  m._miccaPendente=true;
+  return true;
+}
+// grava na nuvem a troca feita por applyMiccaReplace (com cópia de segurança no registro de atividades)
+function persistMicca(ac){
+  const m=STATE.acmaps[ac]; if(!m||!m._miccaPendente||!ONLINE||!DB) return;
+  if(typeof podeAlterar==='function' && !podeAlterar('mapa',ac)) return;
+  const M=window.JETFOR_MICCA[ac]; const bk=m._miccaBackup||{};
+  try{ localStorage.setItem('jetfor_backup_antes_'+M.versao+'_'+ac, JSON.stringify(bk)); }catch(e){}
+  logAction('Cópia de segurança antes da MICCA ('+ac+')', JSON.stringify(bk));
+  SUPPRESS=true;
+  acDoc(ac).update({tarefas:m.tarefas, contadores:m.contadores, updatedAt:new Date().toISOString()})
+    .then(()=>{ SUPPRESS=false; m._miccaPendente=false; logAction('Substituiu o mapa pela '+M.versao, ac+' · '+m.tarefas.length+' itens'); toast('✔ Mapa do '+ac+' atualizado pela MICCA'); })
+    .catch(e=>{ SUPPRESS=false; console.error('micca '+ac,e); });
+}
 function applyFullRebuild(m, ac){
   if(!window.JETFOR_FULL || !window.JETFOR_FULL[ac]) return;
+  if(window.JETFOR_MICCA && window.JETFOR_MICCA[ac]) return;   // v76: mapa vem da MICCA, não da planilha antiga
   const target = window.JETFOR_FULL[ac];
   const cur = m.tarefas || [];
   const byName = {};
@@ -322,7 +355,7 @@ function applyFullRebuild(m, ac){
   // preserva itens que existiam no banco e NÃO estão na planilha (criados/editados pelo usuário) — nada some
   Object.keys(byName).forEach(k=>{ (byName[k]||[]).forEach(extra=>{ if(extra) m.tarefas.push(extra); }); });
 }
-function migrateMapsFull(){ Object.keys(STATE.acmaps||{}).forEach(ac=>{ const m=STATE.acmaps[ac]; migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac); }); }
+function migrateMapsFull(){ Object.keys(STATE.acmaps||{}).forEach(ac=>{ const m=STATE.acmaps[ac]; applyMiccaReplace(m,ac); migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac); }); }
 function buildCounterGroups(){
   const ac = (cur()&&cur().aeronave)||{};
   const nM = ac.nMotores!=null? ac.nMotores : 2;
@@ -2161,6 +2194,8 @@ function boot(){
   $('#btnDelete').addEventListener('click',deleteTask);
   $('#btnSave').addEventListener('click',saveAll);
   $('#btnExport').addEventListener('click',exportJSON);
+  $('#btnXlsExport').addEventListener('click',()=>window.exportarMapaExcel&&window.exportarMapaExcel());
+  $('#btnXlsImport').addEventListener('click',()=>window.abrirImportarMapa&&window.abrirImportarMapa());
   $('#chkAll').addEventListener('change',e=>{ document.querySelectorAll('#tbl .rowchk').forEach(cb=>cb.checked=e.target.checked); updateOSsel(); });
   $('#btnOS').addEventListener('click',gerarOS);
   $('#btnBaixa').addEventListener('click',openBaixa);
