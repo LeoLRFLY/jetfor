@@ -68,10 +68,12 @@ function computeWith(task, CT, hoje){
     r.num = { venc, disp, unit };
   }
   // parte calendário (co-limite ou tarefa só-calendário)
-  if(task.cal && task.cal.exec){
-    const vd = addMonths(task.cal.exec, task.cal.meses);
+  // v77: data alvo (cal.alvo) — vale o que chegar primeiro: últ. exec. + meses ou a data alvo
+  if(task.cal && (task.cal.exec || task.cal.alvo)){
+    let vd = task.cal.exec ? addMonths(task.cal.exec, task.cal.meses) : null, alvo=false;
+    if(task.cal.alvo){ const a=new Date(task.cal.alvo+'T00:00:00'); if(!isNaN(a) && (!vd || a<vd)){ vd=a; alvo=true; } }
     const dd = daysBetween(hoje, vd);
-    r.cal = { venc:vd, disp:dd };
+    r.cal = { venc:vd, disp:dd, alvo:alvo };
   }
   // status = pior caso entre numérico e calendário
   const cands=[];
@@ -190,7 +192,7 @@ function seedAllAC(){
         if(d.contadores) m.contadores=d.contadores;
         if(d.tarefas) m.tarefas=d.tarefas;
         if(d.da) m.da=d.da;
-        applyMiccaReplace(m,ac); migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac);
+        applyMiccaReplace(m,ac); fixMiccaAlvo(m,ac); migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac);
         persistMicca(ac);
         if($('#view-inicio').dataset.done) drawFleet();
       }
@@ -217,7 +219,7 @@ function subscribeAC(ac){
     if(d.docCatsExtra) m.docCatsExtra=d.docCatsExtra;
     if(d.grupos) m.grupos=d.grupos;
     if(d.baixas) m.baixas=d.baixas;
-    applyMiccaReplace(m,ac); migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac);
+    applyMiccaReplace(m,ac); fixMiccaAlvo(m,ac); migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac);
     persistMicca(ac);
     if(ac===STATE.currentAC){ STATE.contadores=m.contadores; STATE.tarefas=m.tarefas; renderCounters(); renderTable(); }
   });
@@ -320,13 +322,32 @@ function applyMiccaReplace(m, ac){
 function persistMicca(ac){
   const m=STATE.acmaps[ac]; if(!m||!m._miccaPendente||!ONLINE||!DB) return;
   if(typeof podeAlterar==='function' && !podeAlterar('mapa',ac)) return;
-  const M=window.JETFOR_MICCA[ac]; const bk=m._miccaBackup||{};
-  try{ localStorage.setItem('jetfor_backup_antes_'+M.versao+'_'+ac, JSON.stringify(bk)); }catch(e){}
-  logAction('Cópia de segurança antes da MICCA ('+ac+')', JSON.stringify(bk));
+  const M=window.JETFOR_MICCA[ac]; const bk=m._miccaBackup;
+  if(bk){
+    try{ localStorage.setItem('jetfor_backup_antes_'+M.versao+'_'+ac, JSON.stringify(bk)); }catch(e){}
+    logAction('Cópia de segurança antes da MICCA ('+ac+')', JSON.stringify(bk));
+  }
   SUPPRESS=true;
   acDoc(ac).update({tarefas:m.tarefas, contadores:m.contadores, updatedAt:new Date().toISOString()})
-    .then(()=>{ SUPPRESS=false; m._miccaPendente=false; logAction('Substituiu o mapa pela '+M.versao, ac+' · '+m.tarefas.length+' itens'); toast('✔ Mapa do '+ac+' atualizado pela MICCA'); })
+    .then(()=>{ SUPPRESS=false; m._miccaPendente=false;
+      if(bk){ logAction('Substituiu o mapa pela '+M.versao, ac+' · '+m.tarefas.length+' itens'); toast('✔ Mapa do '+ac+' atualizado pela MICCA'); m._miccaBackup=null; }
+      else logAction('Data alvo nos itens da MICCA', ac+' · '+(m._miccaAlvoN||0)+' itens: data real de cumprimento + data alvo');
+      m._miccaAlvoN=0; })
     .catch(e=>{ SUPPRESS=false; console.error('micca '+ac,e); });
+}
+// v77: nos itens da MICCA já gravados, troca a "data de cumprimento ajustada" pela data real + data alvo
+function fixMiccaAlvo(m, ac){
+  const M=window.JETFOR_MICCA&&window.JETFOR_MICCA[ac]; if(!M||!m) return;
+  const ref={}; (M.tarefas||[]).forEach(t=>{ if(t.cal&&t.cal.alvo) ref[t.id]=t; });
+  let n=0;
+  (m.tarefas||[]).forEach(t=>{
+    const r=t&&ref[t.id]; if(!r||!t.cal||t.cal.alvo) return;
+    if(!/data de cumprimento ajustada/.test(t.obs||'')) return;     // usuário já mexeu: não toca
+    t.cal=Object.assign({},t.cal,{exec:r.cal.exec, alvo:r.cal.alvo});
+    t.obs=String(t.obs).replace(/\s*·?\s*data de cumprimento ajustada p\/ o vencimento mais cedo \(cumpr\. MICCA [^)]*\)/,'').trim();
+    n++;
+  });
+  if(n){ m._miccaPendente=true; m._miccaAlvoN=n; }
 }
 function applyFullRebuild(m, ac){
   if(!window.JETFOR_FULL || !window.JETFOR_FULL[ac]) return;
@@ -355,7 +376,7 @@ function applyFullRebuild(m, ac){
   // preserva itens que existiam no banco e NÃO estão na planilha (criados/editados pelo usuário) — nada some
   Object.keys(byName).forEach(k=>{ (byName[k]||[]).forEach(extra=>{ if(extra) m.tarefas.push(extra); }); });
 }
-function migrateMapsFull(){ Object.keys(STATE.acmaps||{}).forEach(ac=>{ const m=STATE.acmaps[ac]; applyMiccaReplace(m,ac); migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac); }); }
+function migrateMapsFull(){ Object.keys(STATE.acmaps||{}).forEach(ac=>{ const m=STATE.acmaps[ac]; applyMiccaReplace(m,ac); fixMiccaAlvo(m,ac); migrateEngineCounters(m); applyFullRebuild(m,ac); reclassIca(m); applyTaskPatch(m,ac); reclassGroups(m,ac); }); }
 function buildCounterGroups(){
   const ac = (cur()&&cur().aeronave)||{};
   const nM = ac.nMotores!=null? ac.nMotores : 2;
@@ -577,11 +598,18 @@ function openBaixa(fresh){
     <table class="ff"><tr><th>Data da execução</th><td><input type="date" id="bxData" value="${last&&last.data?last.data:hoje}" style="width:150px"></td>
       <th>Oficina executante</th><td><input id="bxRef" value="${last&&last.ref?esc(last.ref):''}" placeholder="Ex.: USA - Uirapuru (vai p/ Observações)"></td></tr></table>
     <div class="fsec">Leituras dos contadores na execução</div>
-    <div class="bxgrid">${rd}</div>`;
+    <div class="bxgrid">${rd}</div>${_baixaAlvoHtml(ids)}`;
   $('#baixaOverlay').classList.add('show');
 }
+// v77: itens com data alvo pedem a validade da peça nova (vazio = volta a valer só os meses)
+function _baixaAlvoHtml(ids){
+  const its=ids.map(id=>STATE.tarefas.find(x=>x.id===id)).filter(t=>t&&t.cal&&t.cal.alvo);
+  if(!its.length) return '';
+  return '<div class="fsec">🎯 Validade da peça nova (data alvo)</div><p class="muted" style="font-size:12px;margin:0 0 6px">Estes itens vencem por data alvo. Informe a validade da peça instalada; deixe vazio para valer só os meses.</p><table class="ff">'+
+    its.map(t=>`<tr><th>${esc(t.nome)}</th><td><input type="date" data-alvo="${esc(t.id)}" value="" style="width:160px"> <span class="muted" style="font-size:11px">atual: ${fmtDate(new Date(t.cal.alvo+'T00:00:00'))}</span></td></tr>`).join('')+'</table>';
+}
 function closeBaixa(){ $('#baixaOverlay').classList.remove('show'); }
-function _baixaApply(ids,data,ref,readings){
+function _baixaApply(ids,data,ref,readings,alvos){
   const m=cur(); let n=0, skip=0; const tarefas=[];
   ids.forEach(id=>{
     const t=m.tarefas.find(x=>x.id===id); if(!t) return;
@@ -590,7 +618,7 @@ function _baixaApply(ids,data,ref,readings){
     let rv = readings[t.base];
     if(rv==null && t.base){ const fb=newFallback(t.base); if(fb && isNew(STATE.contadores[t.base])) rv=readings[fb]; }
     if(t.base && t.base!=='calendario' && t.intervalo!=null && rv!=null){ t.exec=rv; leitura=rv; upd=true; }
-    if(t.cal){ t.cal.exec=data; upd=true; }
+    if(t.cal){ t.cal.exec=data; upd=true; if(alvos && Object.prototype.hasOwnProperty.call(alvos,t.id)) t.cal.alvo=alvos[t.id]||null; }
     if(ref){ t.obs=ref; }   // oficina executante vai para o campo Observações
     if(upd){ t.hist=t.hist||[]; t.hist.push({data:data, oficina:ref||'', leitura:leitura, base:t.base, cal:!!t.cal}); n++; tarefas.push({id:t.id,nome:t.nome,base:t.base,leitura:leitura}); } else skip++;
   });
@@ -603,7 +631,8 @@ function aplicarBaixa(){
   const ref=(root.querySelector('#bxRef')||{}).value||'';
   const readings={}; root.querySelectorAll('[data-bx]').forEach(i=>{ readings[i.dataset.bx]=num(i.value); });
   const m=cur();
-  const res=_baixaApply(ids,data,ref,readings); const n=res.n, skip=res.skip;
+  const alvos={}; root.querySelectorAll('[data-alvo]').forEach(i=>{ alvos[i.dataset.alvo]=i.value||null; });
+  const res=_baixaApply(ids,data,ref,readings,alvos); const n=res.n, skip=res.skip;
   if(res.n>0){ m.baixas=m.baixas||[]; m.baixas.push({ id:'bx'+Date.now().toString(36), data:data, ref:ref, readings:readings, tarefas:res.tarefas, criadoEm:new Date().toISOString(), por:(window.CURRENT_USER&&window.CURRENT_USER.nome)||'' }); }
   setLastBaixa({data:data, ref:ref, readings:readings});
   saveAll(); renderTable();
@@ -880,7 +909,7 @@ function rowEl(t,c,n){
   let calHtml='—';
   if(c.cal){
     const dd=c.cal.disp; const neg=dd!=null&&dd<0;
-    calHtml=`${fmtDate(c.cal.venc)} <span class="${neg?'disp-neg':''}">(${dd!=null?dd+'d':'—'})</span>`;
+    calHtml=`${c.cal.alvo?'<span title="vence pela data alvo (validade da peça)">🎯</span> ':''}${fmtDate(c.cal.venc)} <span class="${neg?'disp-neg':''}">(${dd!=null?dd+'d':'—'})</span>`;
   }
   const inter = (t.intervalo!=null? fmtN(t.intervalo,0)+' '+unit : (t.vencFixo!=null?'fixo':'—'));
   const exec = (t.exec!=null? fmtN(t.exec,1)+' '+unit : '—');
@@ -1070,7 +1099,7 @@ function openModal(id){
   $('#f_pn').value=t.pn||''; $('#f_sn').value=t.sn||'';
   $('#f_intervalo').value=t.intervalo!=null?t.intervalo:''; $('#f_exec').value=t.exec!=null?t.exec:'';
   $('#f_vencfixo').value=t.vencFixo!=null?t.vencFixo:'';
-  $('#f_calmeses').value=t.cal&&t.cal.meses!=null?t.cal.meses:''; $('#f_calexec').value=t.cal&&t.cal.exec?t.cal.exec:'';
+  $('#f_calmeses').value=t.cal&&t.cal.meses!=null?t.cal.meses:''; $('#f_calexec').value=t.cal&&t.cal.exec?t.cal.exec:''; $('#f_calalvo').value=t.cal&&t.cal.alvo?t.cal.alvo:'';
   $('#f_obs').value=t.obs||'';
   if($('#f_tipoControle')){ $('#f_tipoControle').value = (t.tipoVenc==='na')?'na':(t.tipoVenc==='oc'?'oc':'venc'); onTipoControleChange(); }
   $('#btnDelete').style.display=id?'inline-block':'none';
@@ -1081,7 +1110,7 @@ function closeModal(){ $('#overlay').classList.remove('show'); editingId=null; }
 function saveModal(){
   const nome=$('#f_nome').value.trim(); if(!nome){ toast('Informe a nomenclatura'); return; }
   const cat=$('#f_cat').value, unit=$('#f_unit').value;
-  const cm=num($('#f_calmeses').value), ce=$('#f_calexec').value;
+  const cm=num($('#f_calmeses').value), ce=$('#f_calexec').value, ca=$('#f_calalvo').value;
   const modo=$('#f_tipoControle')?$('#f_tipoControle').value:'venc';
   const naoc=(modo==='na'||modo==='oc');
   const common={ nome, grupo:($('#f_grupo').value.trim()||'Diversos'), categoria:cat, unidade:null,
@@ -1089,7 +1118,7 @@ function saveModal(){
     pn:$('#f_pn').value.trim(), sn:$('#f_sn').value.trim(),
     intervalo: naoc?null:num($('#f_intervalo').value), exec: naoc?null:num($('#f_exec').value), vencFixo: naoc?null:num($('#f_vencfixo').value),
     obs:$('#f_obs').value.trim() };
-  if(!naoc && cm!=null&&ce) common.cal={meses:cm,exec:ce};
+  if(!naoc && ((cm!=null&&ce)||ca)) common.cal={meses:cm,exec:ce||null,alvo:ca||null};
   let idxs=[1];
   if(cat==='motor'||cat==='helice'){ idxs=[...document.querySelectorAll('#f_units .unitchk:checked')].map(c=>+c.value); if(!idxs.length){ toast('Selecione ao menos uma unidade (Motor/Hélice)'); return; } }
   function baseFor(idx){ return naoc? null : deriveBase(cat,unit,idx); }
@@ -1116,6 +1145,7 @@ function registrarTroca(){
   const data=STATE.hoje||todayISO();
   if(leitura!=null && t.base && t.base!=='calendario' && t.intervalo!=null){ t.exec=leitura; $('#f_exec').value=leitura; }
   if(t.cal) t.cal.exec=data;
+  if(t.cal && t.cal.alvo){ const v=prompt('Validade da peça nova (data alvo, dd/mm/aaaa). Deixe vazio para valer só os meses:',''); if(v!==null){ const mm=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v.trim()); t.cal.alvo = mm ? mm[3]+'-'+String(mm[2]).padStart(2,'0')+'-'+String(mm[1]).padStart(2,'0') : null; $('#f_calalvo').value=t.cal.alvo||''; } }
   t.hist=t.hist||[]; t.hist.push({data, oficina:'🔧 Troca de peça'+(t.peca?' — '+t.peca:'')+(t.fabricante?' ('+t.fabricante+')':''), leitura:leitura, base:t.base, cal:!!t.cal});
   saveAll(); renderTable(); toast('🔧 Troca registrada no histórico');
   logAction('Registrou troca de peça', (t.nome||'')+(t.peca?' — '+t.peca:''));
@@ -1857,7 +1887,7 @@ function renderMapaSheet(k){
         if(r.intervalo!=null) cells[4]=fmtN(r.intervalo,0)+' '+u;      // Freq.
         if(c.num.venc!=null) cells[11]=fmtN(c.num.venc,1)+' '+u;       // Venc.
         if(c.num.disp!=null) cells[9]=`<span class="${c.num.disp<0?'disp-neg':''}">${fmtN(c.num.disp,1)} ${u}</span>`; } // Disp.
-      if(c.cal){ const dd=c.cal.disp; cells[11]=(cells[11]&&cells[11]!=='')?cells[11]+' · ':''; cells[11]+=`${fmtDate(c.cal.venc)} <span class="${dd!=null&&dd<0?'disp-neg':''}">(${dd!=null?dd+'d':'—'})</span>`; }
+      if(c.cal){ const dd=c.cal.disp; cells[11]=(cells[11]&&cells[11]!=='')?cells[11]+' · ':''; cells[11]+=`${c.cal.alvo?'🎯 ':''}${fmtDate(c.cal.venc)} <span class="${dd!=null&&dd<0?'disp-neg':''}">(${dd!=null?dd+'d':'—'})</span>`; }
     }
     const fadt=fadtsOf(r).map(fd=>`<a href="${esc(fd.url)}" target="_blank" rel="noopener" title="${esc(fd.nome)}" onclick="event.stopPropagation()">📎</a>`).join(' ');
     h+=`<tr class="darow" data-i="${idx}" style="cursor:pointer"><td class="nrcol">${tipo==='repetitiva'?'🔁':''}${nr}</td>${cells.map(c=>`<td>${c}</td>`).join('')}<td class="no-print">${fadt} <button class="btn o sm" data-daedit="${idx}">✎</button> <button class="btn o sm" data-dadel="${idx}">🗑</button></td></tr>`;
@@ -1968,7 +1998,7 @@ function renderICA(){
     const c=compute(t); const unit=c.num?c.num.unit:'';
     const venc=c.num&&c.num.venc!=null?fmtN(c.num.venc,1)+' '+unit:'—';
     const disp=c.num&&c.num.disp!=null?`<span class="${c.num.disp<0?'disp-neg':''}">${fmtN(c.num.disp,1)} ${unit}</span>`:'—';
-    let cal='—'; if(c.cal){const dd=c.cal.disp;cal=`${fmtDate(c.cal.venc)} <span class="${dd!=null&&dd<0?'disp-neg':''}">(${dd!=null?dd+'d':'—'})</span>`;}
+    let cal='—'; if(c.cal){const dd=c.cal.disp;cal=`${c.cal.alvo?'🎯 ':''}${fmtDate(c.cal.venc)} <span class="${dd!=null&&dd<0?'disp-neg':''}">(${dd!=null?dd+'d':'—'})</span>`;}
     const inter=t.intervalo!=null?fmtN(t.intervalo,0)+(t.tipoVenc==='calendario'?'M':' '+unit):'—';
     const pill=`<span class="pill ${c.status}">${c.status==='od'?'VENCIDO':c.status==='wn'?'PRÓXIMO':'EM DIA'}</span>`;
     h+=`<tr class="${c.status}"><td class="nrcol">${i+1}</td><td>${esc(t.nome)}</td><td class="muted">${esc(t.pn||'')}</td>`+
