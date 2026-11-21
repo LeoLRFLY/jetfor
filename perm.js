@@ -168,6 +168,7 @@ const PERM_GUARDS = {
   lfIncluir:          ()=>['listafrota','c'],
   lfRetirar:          ()=>['listafrota','x'],
   lfReincluir:        ()=>['listafrota','c'],
+  abrirImportarMapa:  ()=>['mapa','e',_cur()],
   // Importar substitui tudo: só admin
   importJSON:         ()=>['_admin','x']
 };
@@ -188,7 +189,7 @@ function permInstallGuards(){
 // Para cada tela/ação: elementos escondidos quando NÃO há a permissão.
 const PERM_HIDE = {
   'mapa-c': ['#btnAdd','#f_grupoNew','#btnOS','#osReg','#daNew'],
-  'mapa-e': ['#tbody [data-edit]','.grpedit','#f_troca','#btnBaixa','#baixaOk','#mapa-sheet [data-daedit]','.newbtn'],
+  'mapa-e': ['#btnXlsImport','#tbody [data-edit]','.grpedit','#f_troca','#btnBaixa','#baixaOk','#mapa-sheet [data-daedit]','.newbtn'],
   'mapa-x': ['#btnDelete','.grpdel','#osDel','#mapa-sheet [data-dadel]','#daLimpar','#mapa-sheet [data-bxdel]','#mapa-sheet [data-del]'],
   'frota-c':['#btnAddAc'],
   'frota-e':['.hm-menu [data-edit]','#acOk'],

@@ -799,6 +799,8 @@
         <option value="ok">🟢 Em dia</option>
       </select>
       <button class="btn p sm" id="btnAdd">+ Nova tarefa</button>
+      <button class="btn o sm no-print" id="btnXlsExport" title="Baixar o mapa desta aeronave em Excel (Resumo, Mapa, ICA, DA e Boletins)">📊 Baixar Excel</button>
+      <button class="btn o sm no-print" id="btnXlsImport" title="Subir itens em massa por planilha (com prévia e detecção de duplicados)">📥 Importar planilha</button>
       <button class="btn g sm no-print" id="btnOS" style="display:none">🧾 Gerar O.S. (<span id="osCount">0</span>)</button>
       <button class="btn p sm no-print" id="btnBaixa" style="display:none">✔ Dar baixa (<span id="baixaCount">0</span>)</button>
       <div class="kpis" id="kpis"></div>
@@ -984,6 +986,7 @@
 <script src="patch_data.js"></script>
 <script src="reclass_data.js"></script>
 <script src="full_data.js"></script>
+<script src="micca_fhn_data.js"></script>
 <script src="iio_data.js"></script>
 <script src="forms.js"></script>
 <script src="app.js"></script>
@@ -992,6 +995,7 @@
 <script src="auditorias.js"></script>
 <script src="frota_lista.js"></script>
 <script src="perm.js"></script>
+<script src="excel.js"></script>
 <script>
   if('serviceWorker' in navigator){
     let _swRefreshing=false;
