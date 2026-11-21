@@ -246,6 +246,9 @@
   table{border-collapse:collapse;width:100%;font-size:12px}
   thead th{background:var(--navy2);color:#fff;font-weight:600;padding:7px 8px;text-align:left;
            position:sticky;top:0;white-space:nowrap;font-size:11px}
+  /* v78: cabeçalho do Mapa acompanha a rolagem (app.js · stickMapHead) */
+  #tbl thead th{position:relative;z-index:6;will-change:transform}
+  #tbl thead th.stuck{box-shadow:0 2px 4px rgba(0,0,0,.25)}
   tbody td{padding:6px 8px;border-bottom:1px solid #eceff4;vertical-align:middle}
   tbody tr:nth-child(even){background:var(--zebra)}
   tbody tr.od{background:var(--odbg)!important}
@@ -556,6 +559,7 @@
     body{background:#fff;font-size:10px}
     header{position:static;box-shadow:none} .toolbar,.act,#counters .cnote,.no-print{display:none!important}
     .panel{box-shadow:none;border:none;margin-bottom:6px} thead th{position:static}
+    #tbl thead th{transform:none!important;box-shadow:none!important}
     @page{size:A4 landscape;margin:8mm}
   }
   /* ---- documentos (pastas) ---- */
@@ -805,7 +809,7 @@
       <button class="btn p sm no-print" id="btnBaixa" style="display:none">✔ Dar baixa (<span id="baixaCount">0</span>)</button>
       <div class="kpis" id="kpis"></div>
     </div>
-    <div class="tblwrap">
+    <div class="tblwrap maptbl">
       <table id="tbl">
         <thead><tr>
           <th class="no-print sel"><input type="checkbox" id="chkAll" title="Selecionar todos"></th>
