@@ -2276,3 +2276,18 @@ function boot(){
   $('#acOverlay').addEventListener('click',e=>{ if(e.target.id==='acOverlay') closeAcModal(); });
 }
 document.addEventListener('DOMContentLoaded',boot);
+
+// v78: mantém o cabeçalho da tabela do Mapa visível (logo abaixo da barra do topo) ao rolar a página
+function stickMapHead(){
+  const w=document.querySelector('.maptbl'), ths=document.querySelectorAll('#tbl thead th');
+  if(!w||!ths.length||!w.offsetParent) return;
+  const hd=document.querySelector('header'); const top=hd?Math.max(0,hd.getBoundingClientRect().bottom):0;
+  const r=w.getBoundingClientRect(), h=ths[0].offsetHeight;
+  const dy=Math.round(Math.max(0, Math.min(top-r.top, r.height-h*2)));
+  const tf=dy?'translateY('+dy+'px)':'';
+  ths.forEach(th=>{ if(th.style.transform!==tf){ th.style.transform=tf; th.classList.toggle('stuck',dy>0); } });
+}
+(function(){ let raf=0; const go=()=>{ if(!raf) raf=requestAnimationFrame(()=>{ raf=0; stickMapHead(); }); };
+  window.addEventListener('scroll',go,{passive:true}); window.addEventListener('resize',go);
+  document.addEventListener('DOMContentLoaded',()=>{ const tb=document.getElementById('tbody'); if(tb) new MutationObserver(go).observe(tb,{childList:true}); });
+})();
