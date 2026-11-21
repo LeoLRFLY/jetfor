@@ -1,11 +1,12 @@
 /* ==========================================================================
-   JetFor · Autenticação (Firebase Auth) — login, cadastro, recuperação,
+   JetFor · Autenticação (Firebase Auth) — login, recuperação de senha,
    e gestão de usuários (papéis: admin / editor / leitor).
    ========================================================================== */
 'use strict';
 
 // E-mail do administrador "semente": esta conta entra já aprovada como admin.
-// Novos cadastros entram como 'leitor' e ficam PENDENTES até um admin liberar.
+// v79: não existe mais cadastro pela tela; o acesso é só por convite (tela Usuários → api/convidar.js).
+// Quem entra sem perfil (ex.: convite apagado) fica como 'leitor' PENDENTE até um admin liberar.
 window.JETFOR_ADMIN_EMAIL = (window.JETFOR_ADMIN_EMAIL || 'leo85filipe@gmail.com').toLowerCase();
 // UID do administrador-mestre: sempre admin e ativo, à prova de bloqueio.
 window.JETFOR_ADMIN_UID = (window.JETFOR_ADMIN_UID || 'l3Cnzaf42DRBK6MIHiXfnHxg2Rk2');
@@ -49,24 +50,10 @@ function authLoginForm(){
     <button class="btn p authbtn" onclick="doLogin()">Entrar</button>
     <div class="authlinks">
       <a href="#" onclick="authResetForm();return false">Esqueci minha senha</a>
-      <a href="#" onclick="authSignupForm();return false">Criar conta</a>
     </div>
+    <div class="authnote">O acesso é só por convite. Se você ainda não recebeu o seu, fale com o Diretor de Manutenção.</div>
   </div>`);
   setTimeout(()=>{ const e=document.getElementById('au_email'); if(e) e.focus(); },50);
-}
-function authSignupForm(){
-  authShowGate(`<div class="authcard">
-    ${_brand()}
-    <h2>Criar conta</h2>
-    <div class="authmsg" id="authMsg"></div>
-    <label>Nome<input type="text" id="au_nome" placeholder="Seu nome completo"></label>
-    <label>E-mail<input type="email" id="au_email" autocomplete="username" placeholder="voce@empresa.com"></label>
-    <label>Senha<input type="password" id="au_pass" autocomplete="new-password" placeholder="mínimo 6 caracteres"></label>
-    <label>Confirmar senha<input type="password" id="au_pass2" autocomplete="new-password" placeholder="repita a senha" onkeydown="if(event.key==='Enter')doSignup()"></label>
-    <button class="btn p authbtn" onclick="doSignup()">Cadastrar</button>
-    <div class="authlinks"><a href="#" onclick="authLoginForm();return false">← Voltar ao login</a></div>
-    <div class="authnote">Novos cadastros ficam pendentes até um administrador liberar o acesso.</div>
-  </div>`);
 }
 function authResetForm(){
   authShowGate(`<div class="authcard">
@@ -82,7 +69,7 @@ function authPendingScreen(email){
   authShowGate(`<div class="authcard">
     ${_brand()}
     <h2>Conta aguardando liberação</h2>
-    <div class="authnote" style="margin-top:6px">A conta <b>${_h(email)}</b> foi criada e está <b>pendente de aprovação</b> por um administrador. Você receberá acesso assim que for liberada.</div>
+    <div class="authnote" style="margin-top:6px">O e-mail <b>${_h(email)}</b> ainda não tem acesso liberado. O acesso ao JetFor é só por convite: fale com o Diretor de Manutenção.</div>
     <button class="btn o authbtn" style="margin-top:14px" onclick="authLogout()">Sair</button>
   </div>`);
 }
@@ -94,24 +81,6 @@ function doLogin(){
   if(!email||!pass){ _msg('authMsg','Preencha e-mail e senha.'); return; }
   _msg('authMsg','Entrando…');
   AUTH.signInWithEmailAndPassword(email,pass).catch(e=>_msg('authMsg',authErrMsg(e.code)));
-}
-function doSignup(){
-  const nome=(document.getElementById('au_nome').value||'').trim();
-  const email=(document.getElementById('au_email').value||'').trim();
-  const pass=(document.getElementById('au_pass').value||'');
-  const pass2=(document.getElementById('au_pass2').value||'');
-  if(!nome){ _msg('authMsg','Informe seu nome.'); return; }
-  if(!email){ _msg('authMsg','Informe o e-mail.'); return; }
-  if(pass.length<6){ _msg('authMsg','A senha precisa ter ao menos 6 caracteres.'); return; }
-  if(pass!==pass2){ _msg('authMsg','As senhas não conferem.'); return; }
-  _msg('authMsg','Criando conta…');
-  AUTH.createUserWithEmailAndPassword(email,pass).then(cred=>{
-    const u=cred.user; const isAdmin=(email.toLowerCase()===window.JETFOR_ADMIN_EMAIL) || isMasterUid(u.uid);
-    return DB.collection('usuarios').doc(u.uid).set({
-      nome:nome, email:email.toLowerCase(), papel:isAdmin?'admin':'leitor',
-      ativo:isAdmin?true:false, criadoEm:new Date().toISOString()
-    });
-  }).catch(e=>_msg('authMsg',authErrMsg(e.code)));
 }
 function doReset(){
   const email=(document.getElementById('au_email').value||'').trim();
