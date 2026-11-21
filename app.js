@@ -596,7 +596,9 @@ function openBaixa(fresh){
     ${hint}
     <p class="lead"><b>${ids.length}</b> tarefa(s) selecionada(s). Informe a data e as leituras dos contadores no momento da execução — cada tarefa recebe a leitura correspondente à sua base e o VENC/DISP é recalculado.</p>
     <table class="ff"><tr><th>Data da execução</th><td><input type="date" id="bxData" value="${last&&last.data?last.data:hoje}" style="width:150px"></td>
-      <th>Oficina executante</th><td><input id="bxRef" value="${last&&last.ref?esc(last.ref):''}" placeholder="Ex.: USA - Uirapuru (vai p/ Observações)"></td></tr></table>
+      <th>Oficina executante</th><td><input id="bxRef" value="${last&&last.ref?esc(last.ref):''}" placeholder="Ex.: USA - Uirapuru (vai p/ Observações)"></td></tr>
+      <tr><th>O.S. da oficina (nº)</th><td><input id="bxOsNum" value="" placeholder="Ex.: OS 028/2026" style="width:150px"></td>
+      <th>PDF da O.S. (link)</th><td><input id="bxOsUrl" value="" placeholder="Cole o link do PDF no Drive"> ${osTerralBtn()}</td></tr></table>
     <div class="fsec">Leituras dos contadores na execução</div>
     <div class="bxgrid">${rd}</div>${_baixaAlvoHtml(ids)}`;
   $('#baixaOverlay').classList.add('show');
@@ -609,7 +611,8 @@ function _baixaAlvoHtml(ids){
     its.map(t=>`<tr><th>${esc(t.nome)}</th><td><input type="date" data-alvo="${esc(t.id)}" value="" style="width:160px"> <span class="muted" style="font-size:11px">atual: ${fmtDate(new Date(t.cal.alvo+'T00:00:00'))}</span></td></tr>`).join('')+'</table>';
 }
 function closeBaixa(){ $('#baixaOverlay').classList.remove('show'); }
-function _baixaApply(ids,data,ref,readings,alvos){
+function _baixaApply(ids,data,ref,readings,alvos,os){
+  os=os||{}; const osNum=String(os.num||'').trim(), osUrl=osUrlOk(os.url)?String(os.url).trim():'';
   const m=cur(); let n=0, skip=0; const tarefas=[];
   ids.forEach(id=>{
     const t=m.tarefas.find(x=>x.id===id); if(!t) return;
@@ -620,7 +623,7 @@ function _baixaApply(ids,data,ref,readings,alvos){
     if(t.base && t.base!=='calendario' && t.intervalo!=null && rv!=null){ t.exec=rv; leitura=rv; upd=true; }
     if(t.cal){ t.cal.exec=data; upd=true; if(alvos && Object.prototype.hasOwnProperty.call(alvos,t.id)) t.cal.alvo=alvos[t.id]||null; }
     if(ref){ t.obs=ref; }   // oficina executante vai para o campo Observações
-    if(upd){ t.hist=t.hist||[]; t.hist.push({data:data, oficina:ref||'', leitura:leitura, base:t.base, cal:!!t.cal}); n++; tarefas.push({id:t.id,nome:t.nome,base:t.base,leitura:leitura}); } else skip++;
+    if(upd){ t.hist=t.hist||[]; const he={data:data, oficina:ref||'', leitura:leitura, base:t.base, cal:!!t.cal}; if(osNum) he.osNum=osNum; if(osUrl) he.osUrl=osUrl; t.hist.push(he); n++; tarefas.push({id:t.id,nome:t.nome,base:t.base,leitura:leitura}); } else skip++;
   });
   return {n,skip,tarefas};
 }
@@ -632,8 +635,10 @@ function aplicarBaixa(){
   const readings={}; root.querySelectorAll('[data-bx]').forEach(i=>{ readings[i.dataset.bx]=num(i.value); });
   const m=cur();
   const alvos={}; root.querySelectorAll('[data-alvo]').forEach(i=>{ alvos[i.dataset.alvo]=i.value||null; });
-  const res=_baixaApply(ids,data,ref,readings,alvos); const n=res.n, skip=res.skip;
-  if(res.n>0){ m.baixas=m.baixas||[]; m.baixas.push({ id:'bx'+Date.now().toString(36), data:data, ref:ref, readings:readings, tarefas:res.tarefas, criadoEm:new Date().toISOString(), por:(window.CURRENT_USER&&window.CURRENT_USER.nome)||'' }); }
+  const osNum=((root.querySelector('#bxOsNum')||{}).value||'').trim(), osUrl=((root.querySelector('#bxOsUrl')||{}).value||'').trim();
+  if(osUrl && !osUrlOk(osUrl)){ toast('⚠ O link do PDF da O.S. precisa começar com https://'); return; }
+  const res=_baixaApply(ids,data,ref,readings,alvos,{num:osNum,url:osUrl}); const n=res.n, skip=res.skip;
+  if(res.n>0){ m.baixas=m.baixas||[]; const rb={ id:'bx'+Date.now().toString(36), data:data, ref:ref, readings:readings, tarefas:res.tarefas, criadoEm:new Date().toISOString(), por:(window.CURRENT_USER&&window.CURRENT_USER.nome)||'' }; if(osNum) rb.osNum=osNum; if(osUrl) rb.osUrl=osUrl; m.baixas.push(rb); }
   setLastBaixa({data:data, ref:ref, readings:readings});
   saveAll(); renderTable();
   toast('✔ Baixa aplicada em '+n+' tarefa(s)'+(skip?' ('+skip+' sem intervalo/calendário — não alteradas)':''));
@@ -712,7 +717,8 @@ function osDocHTML(d){
       <button type="button" class="btn o sm no-print" id="osSvcAdd" style="margin:6px 0 2px">+ adicionar item</button>
       <table class="ff"><tr><th>Nome Diretor de Manutenção</th><td>Leonardo Filipe de Araujo</td><th>CANAC/CREA/CFT</th><td>CREA 1713750589</td><th>Assinatura</th><td class="ossig"></td></tr></table>
       <div class="fsec">EXECUÇÃO</div>
-      <table class="ff"><tr><th>Número da O.S.</th><td>${osInp('execNum',d.execNum)}</td><th>Data de Encerramento</th><td>${osInp('execData',d.execData,'placeholder="__/__/____"')}</td></tr></table>
+      <table class="ff"><tr><th>Número da O.S.</th><td>${osInp('execNum',d.execNum)}</td><th>Data de Encerramento</th><td>${osInp('execData',d.execData,'placeholder="__/__/____"')}</td></tr>
+        <tr class="no-print"><th>PDF da O.S. (link)</th><td colspan="2">${osInp('osUrl',d.osUrl||'','placeholder="Cole o link do PDF no Drive"')}</td><td>${osTerralBtn()}</td></tr></table>
       <div class="fsec">DECLARAÇÃO DE LIBERAÇÃO PARA RETORNO AO SERVIÇO</div>
       <div class="osdecl">Declaro que os serviços acima foram executados de acordo com as instruções técnicas e a legislação vigente. Os itens em ACR (se houver), foram transferidos para nova Ordem de Serviço, como descrita na ação executada do item específico. O(s) Produto(s) aeronáutico(s) afetado(s) por esta Ordem de Serviço está(ão) aeronavegáveis e autorizado(s) para retorno ao Serviço.</div>
       <table class="ff"><tr><th>Responsável</th><td>Leonardo Filipe de Araujo · CREA 1713750589</td><th>Assinatura</th><td class="ossig"></td></tr></table>
@@ -741,7 +747,7 @@ function osCollect(){
     oficina:gv('oficina'), matricula:b.matricula, sn:b.sn, nM:b.nM||0, nH:b.nH||0,
     aer:{tsn:gv('aer.tsn'),tso:gv('aer.tso'),pousos:gv('aer.pousos'),csn:gv('aer.csn'),cso:gv('aer.cso')},
     mot:[], hel:[], servicos:osSvcValues().map(s=>s.trim()).filter(Boolean),
-    execNum:gv('execNum'), execData:gv('execData') };
+    execNum:gv('execNum'), execData:gv('execData'), osUrl:gv('osUrl') };
   for(let i=0;i<d.nM;i++) d.mot.push({pn:gv('mot.'+i+'.pn'),sn:gv('mot.'+i+'.sn'),tsn:gv('mot.'+i+'.tsn'),tso:gv('mot.'+i+'.tso'),csn:gv('mot.'+i+'.csn'),cso:gv('mot.'+i+'.cso')});
   for(let i=0;i<d.nH;i++) d.hel.push({pn:gv('hel.'+i+'.pn'),sn:gv('hel.'+i+'.sn'),tsn:gv('hel.'+i+'.tsn'),tso:gv('hel.'+i+'.tso')});
   return d;
@@ -781,15 +787,25 @@ function excluirOS(idx){
   if($('#osOverlay').classList.contains('show')) osClose();
   if($('#mapa-sheet').style.display!=='none') renderHistoricoOS();
 }
+// v80: O.S. da oficina (Terral) guardadas no Google Drive compartilhado
+const OS_TERRAL_URL='https://drive.google.com/drive/folders/1FdPjhcVHvDryejsACjOdYLDGDFMMlMHe';
+function osUrlOk(u){ return /^https:\/\/[^\s"'<>]+$/i.test(String(u||'').trim()); }
+function osLinkHtml(num,url){
+  num=String(num||'').trim(); url=String(url||'').trim();
+  if(url && osUrlOk(url)) return `<a href="${esc(url)}" target="_blank" rel="noopener" title="Abrir PDF da O.S.">📄 ${esc(num||'O.S.')}</a>`;
+  return num?esc(num):'—';
+}
+function osTerralBtn(){ return `<a class="btn o sm no-print" href="${OS_TERRAL_URL}" target="_blank" rel="noopener" title="Abre a pasta de O.S. da Terral no Google Drive (precisa ter acesso ao Drive compartilhado)">📂 O.S. Terral no Drive</a>`; }
 function renderHistoricoOS(){
   const h0=(cur().osHistorico)||[];
   let h=`<div class="panel"><h2><span class="tag">O.S.</span> Histórico de Ordens de Serviço — ${esc(STATE.currentAC)}</h2><div class="pbody">`;
   const prox=osNextLabel().label;
   h+=`<p class="lead">Próxima O.S. a emitir: <b>${prox}</b>. Clique em uma O.S. para abrir, editar e reimprimir. A numeração avança ao registrar uma nova.</p>`;
+  h+=`<p style="margin:0 0 10px">${osTerralBtn()} <span class="muted" style="font-size:12px">PDFs das O.S. executadas pela oficina (abre só para quem tem acesso ao Drive).</span></p>`;
   if(!h0.length){ h+='<p class="lead">Nenhuma O.S. registrada ainda para esta aeronave.</p>'; }
   else{
-    h+=`<div class="tblwrap"><table class="da"><thead><tr><th>O.S. Nº</th><th>Data</th><th class="num">Itens</th><th>Serviços</th><th class="num">Ações</th></tr></thead><tbody>`;
-    h0.map((o,i)=>({o,i})).reverse().forEach(({o,i})=>{ h+=`<tr class="osrow" data-i="${i}" style="cursor:pointer"><td><b>${esc(o.numero)}</b></td><td>${fmtDate(new Date((o.data||'')+'T00:00:00'))}</td><td class="num">${o.qtd||(o.itens?o.itens.length:0)}</td><td class="obscell">${esc((o.itens||[]).join(' · '))}</td><td class="num" style="white-space:nowrap"><button class="btn o sm" data-open="${i}">Abrir</button> <button class="btn o sm" data-del="${i}" title="excluir">🗑</button></td></tr>`; });
+    h+=`<div class="tblwrap"><table class="da"><thead><tr><th>O.S. Nº</th><th>Data</th><th class="num">Itens</th><th>Serviços</th><th>O.S. oficina</th><th class="num">Ações</th></tr></thead><tbody>`;
+    h0.map((o,i)=>({o,i})).reverse().forEach(({o,i})=>{ h+=`<tr class="osrow" data-i="${i}" style="cursor:pointer"><td><b>${esc(o.numero)}</b></td><td>${fmtDate(new Date((o.data||'')+'T00:00:00'))}</td><td class="num">${o.qtd||(o.itens?o.itens.length:0)}</td><td class="obscell">${esc((o.itens||[]).join(' · '))}</td><td onclick="event.stopPropagation()">${osLinkHtml(o.doc&&o.doc.execNum,o.doc&&o.doc.osUrl)}</td><td class="num" style="white-space:nowrap"><button class="btn o sm" data-open="${i}">Abrir</button> <button class="btn o sm" data-del="${i}" title="excluir">🗑</button></td></tr>`; });
     h+=`</tbody></table></div>`;
   }
   h+=`</div></div>`;
@@ -805,11 +821,11 @@ function renderBaixas(){
   h+=`<p class="lead">Cada baixa em massa fica registrada aqui para rastreabilidade. Clique em um registro para ver os detalhes e, se preciso, <b>indicar mais tarefas</b> que foram executadas junto (mesma data/oficina/leituras) sem redigitar tudo.</p>`;
   if(!bx.length){ h+='<p class="lead">Nenhuma baixa registrada ainda para esta aeronave.</p>'; }
   else{
-    h+=`<div class="tblwrap"><table class="da"><thead><tr><th>Data</th><th>Oficina</th><th class="num">Tarefas</th><th>Registrado por</th><th class="num">Ações</th></tr></thead><tbody>`;
+    h+=`<div class="tblwrap"><table class="da"><thead><tr><th>Data</th><th>Oficina</th><th>O.S.</th><th class="num">Tarefas</th><th>Registrado por</th><th class="num">Ações</th></tr></thead><tbody>`;
     bx.map((o,i)=>({o,i})).reverse().forEach(({o,i})=>{
       const dstr=o.data?fmtDate(new Date(o.data+'T00:00:00')):'—';
       const qtd=(o.tarefas&&o.tarefas.length)||0;
-      h+=`<tr class="bxrow" data-i="${i}" style="cursor:pointer"><td><b>${dstr}</b></td><td>${esc(o.ref||'—')}</td><td class="num">${qtd}</td><td>${esc(o.por||'—')}</td><td class="num" style="white-space:nowrap"><button class="btn o sm" data-bxopen="${i}">Abrir</button> <button class="btn o sm" data-bxdel="${i}" title="excluir registro">🗑</button></td></tr>`;
+      h+=`<tr class="bxrow" data-i="${i}" style="cursor:pointer"><td><b>${dstr}</b></td><td>${esc(o.ref||'—')}</td><td onclick="event.stopPropagation()">${osLinkHtml(o.osNum,o.osUrl)}</td><td class="num">${qtd}</td><td>${esc(o.por||'—')}</td><td class="num" style="white-space:nowrap"><button class="btn o sm" data-bxopen="${i}">Abrir</button> <button class="btn o sm" data-bxdel="${i}" title="excluir registro">🗑</button></td></tr>`;
     });
     h+=`</tbody></table></div>`;
   }
@@ -836,7 +852,9 @@ function renderBaixaDetalhe(i){
   h+=`<p><a href="#" id="bxBack">← voltar ao registro de baixas</a></p>`;
   h+=`<table class="ff"><tr><th>Data</th><td>${dstr}</td><th>Oficina</th><td>${esc(o.ref||'—')}</td></tr>`;
   h+=`<tr><th>Registrado por</th><td>${esc(o.por||'—')}</td><th>Em</th><td>${o.criadoEm?fmtDate(new Date(o.criadoEm)):'—'}</td></tr>`;
-  h+=`<tr><th>Leituras</th><td colspan="3">${leit}</td></tr></table>`;
+  h+=`<tr><th>Leituras</th><td colspan="3">${leit}</td></tr>`;
+  h+=`<tr><th>O.S. da oficina</th><td>${osLinkHtml(o.osNum,o.osUrl)}</td><th>Ligar PDF</th><td class="no-print"><input id="bxdOsNum" value="${esc(o.osNum||'')}" placeholder="nº da O.S." style="width:110px"> <input id="bxdOsUrl" value="${esc(o.osUrl||'')}" placeholder="link do PDF no Drive" style="width:220px"> <button class="btn g sm" id="bxdOsSave">Salvar</button> ${osTerralBtn()}</td></tr></table>`;
+  h+=`<p class="muted" style="font-size:12px;margin:4px 0 0">Ao salvar, a O.S. também aparece no histórico de cada tarefa desta baixa.</p>`;
   const ts=(o.tarefas||[]);
   h+=`<div class="fsec">Tarefas baixadas neste registro (${ts.length})</div>`;
   if(!ts.length){ h+='<p class="lead">Nenhuma tarefa listada.</p>'; }
@@ -863,17 +881,32 @@ function renderBaixaDetalhe(i){
   h+=`</div></div>`;
   $('#mapa-sheet').innerHTML=h;
   $('#bxBack').addEventListener('click',e=>{ e.preventDefault(); renderBaixas(); });
+  $('#bxdOsSave').addEventListener('click',()=>baixaSalvarOS(i));
   const srch=$('#bxPickSearch'), list=$('#bxPickList');
   function upd(){ const n=list.querySelectorAll('.bxpick:checked').length; $('#bxPickCount').textContent=n?(n+' marcada(s)'):''; }
   if(srch) srch.addEventListener('input',()=>{ const q=srch.value.trim().toLowerCase(); list.querySelectorAll('.bxpickrow').forEach(r=>{ r.style.display=(!q||r.dataset.txt.indexOf(q)>=0)?'flex':'none'; }); });
   list.querySelectorAll('.bxpick').forEach(c=>c.addEventListener('change',upd));
   $('#bxApplyExtras').addEventListener('click',()=>baixaAplicarExtras(i));
 }
+function baixaSalvarOS(i){
+  const bx=(cur().baixas)||[]; const o=bx[i]; if(!o) return;
+  const num=($('#bxdOsNum').value||'').trim(), url=($('#bxdOsUrl').value||'').trim();
+  if(url && !osUrlOk(url)){ toast('⚠ O link do PDF precisa começar com https://'); return; }
+  if(num) o.osNum=num; else delete o.osNum;
+  if(url) o.osUrl=url; else delete o.osUrl;
+  // propaga para o histórico das tarefas desta baixa (mesma data e oficina)
+  const m=cur(); let k=0;
+  (o.tarefas||[]).forEach(rt=>{ const t=(m.tarefas||[]).find(x=>x.id===rt.id); if(!t||!t.hist) return;
+    for(let j=t.hist.length-1;j>=0;j--){ const e=t.hist[j]; if(e.data===o.data && (e.oficina||'')===(o.ref||'')){ if(num) e.osNum=num; else delete e.osNum; if(url) e.osUrl=url; else delete e.osUrl; k++; break; } } });
+  saveAll(); toast('✔ O.S. ligada à baixa'+(k?' e a '+k+' tarefa(s)':''));
+  logAction('Ligou O.S. a uma baixa', STATE.currentAC+(o.data?' · '+o.data:'')+(num?' · '+num:''));
+  renderBaixaDetalhe(i);
+}
 function baixaAplicarExtras(i){
   const bx=(cur().baixas)||[]; const o=bx[i]; if(!o){ renderBaixas(); return; }
   const ids=Array.from($('#mapa-sheet').querySelectorAll('.bxpick:checked')).map(c=>c.value);
   if(!ids.length){ toast('Marque ao menos uma tarefa'); return; }
-  const res=_baixaApply(ids, o.data, o.ref||'', o.readings||{});
+  const res=_baixaApply(ids, o.data, o.ref||'', o.readings||{}, null, {num:o.osNum,url:o.osUrl});
   if(res.n>0){
     o.tarefas=(o.tarefas||[]).concat(res.tarefas);
     saveAll(); renderTable();
@@ -948,9 +981,9 @@ function openTaskHist(id){
     <b>Última execução:</b> ${ultExec} · <b>Observação atual (oficina):</b> ${esc(t.obs||'—')}</p>`;
   if(!h.length){ body+=`<p class="lead muted">Nenhum cumprimento registrado ainda. Selecione a tarefa e use <b>Dar baixa</b> para registrar a execução, oficina e leitura.</p>`; }
   else{
-    body+=`<div class="tblwrap"><table class="da"><thead><tr><th>Data</th><th>Oficina executante</th><th>Leitura na execução</th></tr></thead><tbody>`;
+    body+=`<div class="tblwrap"><table class="da"><thead><tr><th>Data</th><th>Oficina executante</th><th>O.S.</th><th>Leitura na execução</th></tr></thead><tbody>`;
     h.forEach(e=>{ const leit = e.leitura!=null ? (fmtN(e.leitura,1)+' '+unitForBase(e.base)) : (e.cal?'(calendário)':'—');
-      body+=`<tr><td>${e.data?fmtDate(new Date(e.data+'T00:00:00')):'—'}</td><td>${esc(e.oficina||'—')}</td><td class="num">${leit}</td></tr>`; });
+      body+=`<tr><td>${e.data?fmtDate(new Date(e.data+'T00:00:00')):'—'}</td><td>${esc(e.oficina||'—')}</td><td>${osLinkHtml(e.osNum,e.osUrl)}</td><td class="num">${leit}</td></tr>`; });
     body+=`</tbody></table></div>`;
   }
   // --- Transição: lançar os dados da última execução desta tarefa em outras ---
@@ -991,10 +1024,11 @@ function histLancarEmOutras(id){
   if(!ids.length){ toast('Marque ao menos uma tarefa destino'); return; }
   const data=src.data||todayISO(); const ref=src.oficina||'';
   const readings={}; if(src.base && src.base!=='calendario' && src.leitura!=null){ readings[src.base]=src.leitura; }
-  const res=_baixaApply(ids,data,ref,readings);
+  const res=_baixaApply(ids,data,ref,readings,null,{num:src.osNum,url:src.osUrl});
   if(res.n>0){
     const m=cur(); m.baixas=m.baixas||[];
     m.baixas.push({ id:'bx'+Date.now().toString(36), data:data, ref:ref, readings:readings, tarefas:res.tarefas, criadoEm:new Date().toISOString(), por:(window.CURRENT_USER&&window.CURRENT_USER.nome)||'', origem:'transicao:'+(t.nome||t.id) });
+    { const lb=m.baixas[m.baixas.length-1]; if(src.osNum) lb.osNum=src.osNum; if(src.osUrl) lb.osUrl=src.osUrl; }
     saveAll(); renderTable();
     toast('✔ Lançado em '+res.n+' tarefa(s)'+(res.skip?' ('+res.skip+' sem intervalo/calendário)':''));
     logAction('Lançou dados de tarefa em outras (transição)', res.n+' tarefa(s) · '+STATE.currentAC+' · origem: '+(t.nome||t.id));

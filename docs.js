@@ -93,6 +93,7 @@ function renderDocs(scope){
                       : 'Pasta desta aeronave: PMA, manuais, ICA, certificados, cadernetas e fichas.';
   let h = `<div class="panel"><h2><span class="tag">📁</span> ${esc(title)}</h2><div class="pbody">`;
   h += `<p class="lead">${esc(sub)}</p>`;
+  if(isGeral && typeof osTerralBtn==='function') h += `<p style="margin:0 0 10px">${osTerralBtn()} <span class="muted" style="font-size:12px">Ordens de Serviço da oficina Terral (Drive compartilhado).</span></p>`;
   if(!STORAGE){
     h += `<div class="fdecl" style="background:#fff7ed;border-left-color:#b45309">⚠ <b>Firebase Storage não ativado.</b> Ative em Build → Storage no console do Firebase pra habilitar o envio de arquivos. As pastas já funcionam; o upload libera assim que o Storage estiver ligado.</div>`;
   }
